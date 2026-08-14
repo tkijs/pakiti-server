@@ -236,104 +236,122 @@ class SubSource
 
     private function parse_definitions($defs)
     {
-	# We have CVE definition in this format:
-	# Array
-	#(
-	#    [subSourceDefId] => 5
-	#    [definition_id] => oval:com.redhat.rhsa:def:20120006
-	#    [severity] => Critical
-	#    [title] => RHSA-2012:0006: java-1.4.2-ibm security update (Critical)
-	#    [ref_url] => https://rhn.redhat.com/errata/RHSA-2012-0006.html
-	#    [cves] => Array
-	#        (
-	#            [0] => CVE-2011-3389
-	#            [1] => CVE-2011-3545
-	#        )
-	#
-	#    [osGroup] => Array
-	#        (
-	#            [Red Hat Enterprise Linux 5] => Array
-	#                (
-	#                    [0] => Array
-	#                        (
-	#                            [name] => java-1.4.2-ibm-plugin
-	#                            [version] => 0:1.4.2.13.11
-	#                            [release] => 1jpp.1.el5
-	#                            [operator] => <
-	#                        )
-	#                    [1] => Array
-	#                        (
-	#                             [name] => java-1.4.2-ibm-src
-	#                             [version] => 0:1.4.2.13.11
-	#                             [release] => 1jpp.1.el5
-	#                             [operator] => <
-	#                         )
-	#
-	#                )
-	#
-	#        )
-	#
-	#)
+        # We have CVE definition in this format:
+        # Array
+        #(
+        #    [subSourceDefId] => 5
+        #    [definition_id] => oval:com.redhat.rhsa:def:20120006
+        #    [severity] => Critical
+        #    [title] => RHSA-2012:0006: java-1.4.2-ibm security update (Critical)
+        #    [ref_url] => https://rhn.redhat.com/errata/RHSA-2012-0006.html
+        #    [cves] => Array
+        #        (
+        #            [0] => CVE-2011-3389
+        #            [1] => CVE-2011-3545
+        #        )
+        #
+        #    [osGroup] => Array
+        #        (
+        #            [Red Hat Enterprise Linux 5] => Array
+        #                (
+        #                    [0] => Array
+        #                        (
+        #                            [name] => java-1.4.2-ibm-plugin
+        #                            [version] => 0:1.4.2.13.11
+        #                            [release] => 1jpp.1.el5
+        #                            [operator] => <
+        #                        )
+        #                    [1] => Array
+        #                        (
+        #                             [name] => java-1.4.2-ibm-src
+        #                             [version] => 0:1.4.2.13.11
+        #                             [release] => 1jpp.1.el5
+        #                             [operator] => <
+        #                         )
+        #
+        #                )
+        #
+        #        )
+        #
+        #)
 
-	$vulnerabilities = array();
+        $vulnerabilities = array();
 
-	foreach ($defs as $def) {
-	    $cveDef = new CveDef();
-	    $cveDef->setDefinitionId($def['definition_id']);
-	    $cveDef->setTitle($def['title']);
-	    $cveDef->setRefUrl($def['ref_url']);
-	    $cveDef->setVdsSubSourceDefId($def['subSourceDefId']);
+        foreach ($defs as $def) {
+            $cveDef = new CveDef();
+            $cveDef->setDefinitionId($def['definition_id']);
+            $cveDef->setTitle($def['title']);
+            $cveDef->setRefUrl($def['ref_url']);
+            $cveDef->setVdsSubSourceDefId($def['subSourceDefId']);
 
-	    if (empty($def['cves']))
-		    continue;
+            if (empty($def['cves']))
+                continue;
 
-	    if ($this->_pakiti->getManager('CveDefsManager')->storeCveDef($cveDef)) {
-		foreach ($def['cves'] as $cveName) {
-		    $cve = new Cve();
-		    $cve->setName($cveName);
-		    $this->_pakiti->getManager('CvesManager')->storeCve($cve);
-		    $this->_pakiti->getManager('CveDefsManager')->assignCveToCveDef($cve->getId(), $cveDef->getId());
-		}
-	    }
+            if ($this->_pakiti->getManager('CveDefsManager')->storeCveDef($cveDef)) {
+                foreach ($def['cves'] as $cveName) {
+                    $cve = new Cve();
+                    $cve->setName($cveName);
+                    $this->_pakiti->getManager('CvesManager')->storeCve($cve);
+                    $this->_pakiti->getManager('CveDefsManager')->assignCveToCveDef($cve->getId(), $cveDef->getId());
+                }
+            }
 
-	    # if osGroup not set, than it is unfixed in DSA
-	    if (isset($def['osGroup'])) {
-		foreach ($def['osGroup'] as $osGroupName => $defsPkg) {
-		    foreach ($defsPkg as $defPkg) {
-			$vuln = new Vulnerability();
+            # if osGroup not set, than it is unfixed in DSA
+            if (isset($def['osGroup'])) {
+                foreach ($def['osGroup'] as $osGroupName => $defsPkg) {
+                    foreach ($defsPkg as $defPkg) {
+                    $vuln = new Vulnerability();
 
-			$vuln->setCveDefId($cveDef->getId());
+                    $vuln->setCveDefId($cveDef->getId());
 
-			# OVAL from RH and DSA doesn't contain arch, so use all
-			$archName = 'all';
+                    # OVAL from RH and DSA doesn't contain arch, so use all
+                    $archName = 'all';
 
-			$arch = new Arch();
-			$arch->setName($archName);
-			$this->_pakiti->getManager("ArchsManager")->storeArch($arch);
+                    $arch = new Arch();
+                    $arch->setName($archName);
+                    $this->_pakiti->getManager("ArchsManager")->storeArch($arch);
 
-			$osGroup = new OsGroup();
-			$osGroup->setName($osGroupName);
-			try {
-				$this->_pakiti->getManager('OsGroupsManager')->storeOsGroup($osGroup);
-			} catch (Exception $e) {
-				# This OS is probably missing in the configuration file
-				Utils::log(LOG_ERR, "Unable to store ".$osGroupName.": ".$e->getMessage(), __FILE__, __LINE__);
-				continue;
-			}
+                    $osGroup = new OsGroup();
+                    $osGroup->setName($osGroupName);
+                    try {
+                        $this->_pakiti->getManager('OsGroupsManager')->storeOsGroup($osGroup);
+                    } catch (Exception $e) {
+                        # This OS is probably missing in the configuration file
+                        Utils::log(LOG_ERR, "Unable to store ".$osGroupName.": ".$e->getMessage(), __FILE__, __LINE__);
+                        continue;
+                    }
 
-			$vuln->setName($defPkg['name']);
-			$vuln->setRelease($defPkg['release']);
-			$vuln->setVersion($defPkg['version']);
-			$vuln->setArchId($arch->getId());
-			$vuln->setOsGroupId($osGroup->getId());
-			$vuln->setOperator($defPkg['operator']);
+                    $vuln->setName($defPkg['name']);
+                    $vuln->setRelease($defPkg['release']);
+                    $vuln->setVersion($defPkg['version']);
+                    $vuln->setArchId($arch->getId());
+                    $vuln->setOsGroupId($osGroup->getId());
+                    $vuln->setOperator($defPkg['operator']);
 
-			array_push($vulnerabilities, $vuln);
-		    }
-		}
-	    }
-	}
+                    array_push($vulnerabilities, $vuln);
+                    }
+                }
+            }
 
-	return $vulnerabilities;
+            # Auto-tag Critical CVEs from OVAL
+            if (!empty($def['autoTag'])) {
+                foreach ($def['cves'] as $cveName) {
+                    $cveTag = new cveTag();
+                    $cveTag->setCveName($cveName);
+                    $cveTag->setTagName($def['autoTag']);
+                    $cveTag->setReason('Auto-tagged from OVAL - Severity: ' . $def['severity']);
+                    $cveTag->setInfoUrl($def['ref_url']);
+                    $cveTag->setModifier('auto-oval');
+                    $cveTag->setEnabled(1);
+                    try {
+                        $this -> _pakiti -> getManager("CveTagsManager")->storeCveTag($cveTag);
+                    } catch (Exception $e) {
+                        Utils::log(LOG_WARNING, "Failed to auto-tag CVE " . $cveName . ": " . $e->getMessage(), __FILE__, __LINE__);
+                    }
+                }
+            }
+        }
+
+        return $vulnerabilities;
     }
 }

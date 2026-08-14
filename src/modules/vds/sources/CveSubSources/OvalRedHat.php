@@ -78,6 +78,11 @@ class OvalRedHat extends SubSource implements ISubSource
                         array_push($def['cves'], $cve->nodeValue);
                 }
 
+                #Auto-tag Critical CVEs
+                if (strtolower($def['severity']) === 'critical') {
+                	$def['autoTag'] = 'Critical';
+                }
+
                 # Processing criteria
                 $root_criterias_query = 'def:criteria';
                 $root_criterias = $this->_xpath->query($root_criterias_query, $xDefinition);
