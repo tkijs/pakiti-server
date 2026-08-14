@@ -23,6 +23,10 @@ class Acl
             array_key_exists(Config::$AUTHZ_NAME, $_SERVER) ? $name = $_SERVER[Config::$AUTHZ_NAME] : $name = "";
             array_key_exists(Config::$AUTHZ_EMAIL, $_SERVER) ? $email = $_SERVER[Config::$AUTHZ_EMAIL] : $email = "";
 
+            if (trim($uid) === "") {
+              return;
+            }
+
             # Try to get user from dtb by UID
             $user = $this->getPakiti()->getManager("UsersManager")->getUserByUid($uid);
 
