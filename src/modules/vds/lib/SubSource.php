@@ -336,7 +336,7 @@ class SubSource
             # Auto-tag Critical CVEs from OVAL
             if (!empty($def['autoTag'])) {
                 foreach ($def['cves'] as $cveName) {
-                    $cveTag = new cveTag();
+                    $cveTag = new CveTag();
                     $cveTag->setCveName($cveName);
                     $cveTag->setTagName($def['autoTag']);
                     $cveTag->setReason('Auto-tagged from OVAL - Severity: ' . $def['severity']);

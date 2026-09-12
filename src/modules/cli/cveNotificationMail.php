@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * @author Tilen Krošelj
+ */
 class CveNotificationMail {
     public function getSubject() {
         return 'Pakiti: tagged CVEs detected!';

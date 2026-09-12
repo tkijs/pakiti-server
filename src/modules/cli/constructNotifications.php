@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * @author Tilen Krošelj
+ */
 require(realpath(dirname(__FILE__)) . '/../../common/Loader.php');
 
 /**
@@ -11,6 +14,7 @@ $hostsManager = $pakiti->getManager("HostsManager");
 $reportsManager = $pakiti->getManager("ReportsManager");
 $cvesManager = $pakiti->getManager("CvesManager");
 $hostGroupsManager = $pakiti->getManager("HostGroupsManager");
+$usersManager = $pakiti->getManager("UsersManager");
 
 /**
  * Ensure the host is relevant e.g. contains numOfCvesWithTag.
@@ -83,13 +87,22 @@ foreach ($hosts as $host) {
         /**
          * Ensure users assigned to this group exist.
          */
-        $users = $hostGroupsManager->getUsersAssignedToHostGroup($groupId);
+        $userIds = $hostGroupsManager->getUsersAssignedToHostGroup($groupId);
 
-        if (empty($users)) {
+        if (empty($userIds)) {
             continue;
         }
 
-        foreach ($users as $user) {
+        foreach ($userIds as $userId) {
+
+            $user = $usersManager->getUserById($userId);
+
+            /**
+             * Ensure user
+             */
+            if ($user == null) {
+                continue;
+            }
 
             /**
              * Ensure user's email.

@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * @author Tilen Krošelj
+ */
 require_once(realpath(dirname(__FILE__)) . '/constructNotifications.php');
 require_once(realpath(dirname(__FILE__)) . '/cveNotificationMail.php');
 
