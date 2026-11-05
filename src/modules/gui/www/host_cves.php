@@ -10,6 +10,7 @@ $_tag = $html->getHttpGetVar("tag", null);
 if ($_tag == "true") {
     $_tag = true;
 }
+$_notRunning = ($html->getHttpGetVar("notRunning", null) == "true");
 
 $host = $pakiti->getManager("HostsManager")->getHostById($_id, $html->getUserId());
 if ($host == null) {
@@ -20,6 +21,24 @@ if ($host == null) {
 $html->setTitle("Host: " . $host->getHostname());
 
 $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getId(), $_tag);
+
+$notRunningPkgs = array();
+if ($_notRunning) {
+    $notRunningPkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getId(), null, false);
+}
+
+// Build query string for the checkboxes
+function hostCvesUrl($hostId, $tag, $notRunning)
+{
+    $url = "?hostId=" . $hostId;
+    if ($tag === true) {
+        $url .= "&tag=true";
+    }
+    if ($notRunning) {
+        $url .= "&notRunning=true";
+    }
+    return $url;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -81,10 +100,14 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <!-- Filter -->
-        <div class="bg-white shadow rounded-lg mb-6 overflow-hidden p-4">
+        <div class="bg-white shadow rounded-lg mb-6 overflow-hidden p-4 space-y-2">
             <label class="flex items-center space-x-3 cursor-pointer">
-                <input type="checkbox" onclick="location.href='?hostId=<?php echo $host->getId(); ?><?php if ($_tag !== true) echo '&tag=true'; ?>';"<?php if ($_tag === true) echo ' checked'; ?> class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                <input type="checkbox" onclick="location.href='<?php echo hostCvesUrl($host->getId(), $_tag !== true, $_notRunning); ?>';"<?php if ($_tag === true) echo ' checked'; ?> class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                 <span class="text-sm font-medium text-slate-700">Only tagged CVEs</span>
+            </label>
+            <label class="flex items-center space-x-3 cursor-pointer">
+                <input type="checkbox" onclick="location.href='<?php echo hostCvesUrl($host->getId(), $_tag === true, !$_notRunning); ?>';"<?php if ($_notRunning) echo ' checked'; ?> class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                <span class="text-sm font-medium text-slate-700">Show CVEs of installed but not running kernel packages</span>
             </label>
         </div>
 
@@ -113,15 +136,15 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
                             $cvesNames = $pakiti->getManager("CvesManager")->getCvesNamesForPkgAndOs($pkg->getId(), $host->getOsId(), $_tag);
                         ?>
                             <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-3 whitespace-nowrap font-medium text-slate-900"><?php echo $pkg->getName(); ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap font-medium text-slate-900"><?php echo htmlspecialchars($pkg->getName(), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <code class="inline-flex items-center px-2 py-1 rounded text-xs bg-slate-100 text-slate-800 font-mono">
-                                        <?php echo $pkg->getVersionRelease(); ?>
+                                        <?php echo htmlspecialchars($pkg->getVersionRelease(), ENT_QUOTES, 'UTF-8'); ?>
                                     </code>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-brand-100 text-brand-700">
-                                        <?php echo $pkg->getArchName(); ?>
+                                        <?php echo htmlspecialchars($pkg->getArchName(), ENT_QUOTES, 'UTF-8'); ?>
                                     </span>
                                 </td>
                                 <td class="px-4 py-3">
@@ -129,8 +152,8 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
                                         <?php foreach ($cvesNames as $cveName) {
                                             $tags = $pakiti->getManager("CveTagsManager")->getCveTagsByCveName($cveName);
                                         ?>
-                                            <a href="cve.php?cveName=<?php echo $cveName; ?>" class="inline-flex items-center px-2 py-1 rounded text-xs <?php echo(!empty($tags) ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'); ?> hover:opacity-80">
-                                                <?php echo $cveName; ?>
+                                            <a href="cve.php?cveName=<?php echo urlencode($cveName); ?>" class="inline-flex items-center px-2 py-1 rounded text-xs <?php echo(!empty($tags) ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'); ?> hover:opacity-80">
+                                                <?php echo htmlspecialchars($cveName, ENT_QUOTES, 'UTF-8'); ?>
                                             </a>
                                         <?php } ?>
                                     </div>
@@ -141,6 +164,51 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
                 </table>
             </div>
         </div>
+
+        <?php if ($_notRunning) { ?>
+        <!-- Installed but not running kernel packages -->
+        <div class="mb-4 mt-8">
+            <h2 class="text-base font-semibold text-slate-700">Installed, not running</h2>
+            <p class="text-sm text-slate-500">Kernel packages that are installed but not running. Their CVEs are not tagged, not counted and not notified.</p>
+        </div>
+        <div class="bg-white shadow overflow-hidden rounded-lg border border-slate-200 mb-4 opacity-75">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-xs text-slate-500">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Package</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Installed version</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Architecture</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">CVEs</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-slate-200">
+                        <?php if (empty($notRunningPkgs)) { ?>
+                            <tr><td colspan="4" class="px-4 py-3">No vulnerable kernel packages that are installed but not running.</td></tr>
+                        <?php } ?>
+                        <?php foreach ($notRunningPkgs as $pkg) {
+                            $cvesNames = $pakiti->getManager("CvesManager")->getCvesNamesForPkgAndOs($pkg->getId(), $host->getOsId(), null);
+                        ?>
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-4 py-3 whitespace-nowrap font-medium"><?php echo htmlspecialchars($pkg->getName(), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <code class="inline-flex items-center px-2 py-1 rounded text-xs bg-slate-100 font-mono"><?php echo htmlspecialchars($pkg->getVersionRelease(), ENT_QUOTES, 'UTF-8'); ?></code>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap"><?php echo htmlspecialchars($pkg->getArchName(), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-wrap gap-1">
+                                        <?php foreach ($cvesNames as $cveName) { ?>
+                                            <a href="cve.php?cveName=<?php echo urlencode($cveName); ?>" class="inline-flex items-center px-2 py-1 rounded text-xs bg-slate-100 text-slate-500 hover:opacity-80"><?php echo htmlspecialchars($cveName, ENT_QUOTES, 'UTF-8'); ?></a>
+                                        <?php } ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php } ?>
 
         <footer class="mt-8 border-t border-slate-200 pt-6 pb-4">
             <div class="flex flex-col md:flex-row justify-between items-center">

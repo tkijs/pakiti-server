@@ -107,6 +107,114 @@ final class Utils
     }
 
     /**
+     * Is the package part of the kernel family (several versions can be installed side by side)?
+     */
+    public static function isKernelPkg($pkgName)
+    {
+        if (in_array($pkgName, Config::$KERNEL_PACKAGES_NAMES)) {
+            return true;
+        }
+        $patterns = isset(Config::$KERNEL_PACKAGES_PATTERNS) ? Config::$KERNEL_PACKAGES_PATTERNS : array();
+        foreach ($patterns as $pattern) {
+            if (preg_match("/$pattern/", $pkgName) == 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Canonical key identifying a package (name, version-release without epoch, arch),
+     * used to match packages against the running-kernel-pkgs hint sent by the client.
+     */
+    public static function kernelPkgKey($name, $version, $release, $arch)
+    {
+        $vr = Utils::removeEpoch(trim($version));
+        if ($release !== null && $release !== "") {
+            $vr .= "-" . trim($release);
+        }
+        return trim($name) . " " . $vr . " " . trim($arch);
+    }
+
+    /**
+     * Parse the running-kernel-pkgs report header sent by the client.
+     * Format: "name version arch;name version arch;..." (version may contain epoch and release)
+     * @return array key => true (keys created by kernelPkgKey), empty if the header is missing
+     */
+    public static function parseRunningKernelPkgsHint($hint)
+    {
+        $keys = array();
+        if ($hint === null || trim($hint) === "") {
+            return $keys;
+        }
+        foreach (explode(";", $hint) as $entry) {
+            $fields = preg_split('/\s+/', trim($entry));
+            if (count($fields) != 3) {
+                continue;
+            }
+            $keys[Utils::kernelPkgKey($fields[0], $fields[1], "", $fields[2])] = true;
+        }
+        return $keys;
+    }
+
+    /**
+     * Does the kernel-family package belong to the running kernel?
+     * The package is running if the client listed it in running-kernel-pkgs OR if it matches the
+     * running kernel version (uname -r) heuristically, so a package missed by one of the methods
+     * is never wrongly hidden.
+     *
+     * @param $name, $version, $release, $arch package as parsed by the feeder
+     * @param $type packager (rpm|dpkg)
+     * @param $kernel running kernel (uname -r)
+     * @param $hostArch architecture of the host (uname -m)
+     * @param $runningHint result of parseRunningKernelPkgsHint()
+     */
+    public static function isRunningKernelPkg($name, $version, $release, $arch, $type, $kernel, $hostArch = "", $runningHint = array())
+    {
+        if (array_key_exists(Utils::kernelPkgKey($name, $version, $release, $arch), $runningHint)) {
+            return true;
+        }
+
+        $kernel = trim($kernel);
+        if ($kernel === "") {
+            return false;
+        }
+
+        if ($type == Constants::$PACKAGER_SYSTEM_DPKG) {
+            # Debian/Ubuntu carry the kernel version in the package name, e.g. linux-image-6.1.0-18-amd64
+            # Metapackages (linux-image-amd64) never match.
+            return preg_match('/-' . preg_quote($kernel, '/') . '(-|$)/', $name) == 1;
+        }
+
+        # rpm: uname -r = <version>-<release>[.<arch>][+flavour|-flavour], e.g.
+        #   5.14.0-427.13.1.el9_4.x86_64, 5.14.0-427.el9.aarch64+64k, 5.14.21-150500.55.39-default (SUSE)
+        $versionWithoutEpoch = Utils::removeEpoch($version);
+        $candidates = array($versionWithoutEpoch . "-" . $release);
+        # SUSE packages have an extra rebuild counter in the release (150500.55.39.1) which is not in uname -r
+        if (preg_match('/^(.*)\.[0-9]+$/', $release, $m) == 1) {
+            $candidates[] = $versionWithoutEpoch . "-" . $m[1];
+        }
+        $archs = array();
+        foreach (array($arch, $hostArch) as $a) {
+            if ($a !== null && $a !== "" && $a != "noarch") {
+                $archs[] = preg_quote($a, '/');
+            }
+        }
+        $archRe = empty($archs) ? "" : "(\.(" . implode("|", $archs) . "))?";
+        foreach ($candidates as $candidate) {
+            if (strpos($kernel, $candidate) !== 0) {
+                continue;
+            }
+            # The rest of uname -r must not continue the release (70.13.1 must not match 70.13.11)
+            $rest = substr($kernel, strlen($candidate));
+            if (preg_match('/^' . $archRe . '([+-].*|[A-Za-z]+)?$/', $rest) == 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Get stream context. Through proxy or direct connection.
      */
     public static function getStreamContext()

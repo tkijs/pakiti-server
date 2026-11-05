@@ -138,12 +138,39 @@ class PkgDao
         $this->db->query($sql);
     }
 
-    public function assignPkgToHost($pkgId, $hostId)
+    public function assignPkgToHost($pkgId, $hostId, $running = true)
     {
         $sql = "insert into InstalledPkg set
             pkgId='" . $this->db->escape($pkgId) . "',
+            hostId='" . $this->db->escape($hostId) . "',
+            running='" . ($running ? 1 : 0) . "'";
+        $this->db->query($sql);
+    }
+
+    public function setRunning($pkgId, $hostId, $running)
+    {
+        $sql = "update InstalledPkg set
+            running='" . ($running ? 1 : 0) . "'
+            where pkgId='" . $this->db->escape($pkgId) . "' and
             hostId='" . $this->db->escape($hostId) . "'";
         $this->db->query($sql);
+    }
+
+    /**
+     * Returns array pkgId => running (bool) for all packages installed on the host
+     */
+    public function getRunningFlagsForHost($hostId)
+    {
+        $sql = "select pkgId, running from InstalledPkg
+            where hostId='" . $this->db->escape($hostId) . "'";
+        $flags = array();
+        $rows = $this->db->queryToMultiRow($sql);
+        if ($rows != null) {
+            foreach ($rows as $row) {
+                $flags[$row["pkgId"]] = ($row["running"] == 1);
+            }
+        }
+        return $flags;
     }
 
     public function unassignPkgToHost($pkgId, $hostId)
@@ -194,14 +221,14 @@ class PkgDao
             where $where", "Pkg");
     }
 
-    public function getVulnerableIdsForHost($hostId, $tag)
+    public function getVulnerableIdsForHost($hostId, $tag, $running = true)
     {
         $select = "distinct(Pkg.id)";
         $from = "Pkg";
         $order = "Pkg.name ASC";
 
         # pkgs
-        $join[] = "inner join InstalledPkg on (Pkg.id = InstalledPkg.pkgId and InstalledPkg.hostId = '" . $this->db->escape($hostId) . "')";
+        $join[] = "inner join InstalledPkg on (Pkg.id = InstalledPkg.pkgId and InstalledPkg.hostId = '" . $this->db->escape($hostId) . "' and InstalledPkg.running = '" . ($running ? 1 : 0) . "')";
 
         # cveDefs
         $join[] = "inner join PkgCveDef on Pkg.id = PkgCveDef.pkgId";

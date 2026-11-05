@@ -46,13 +46,14 @@ class CvesManager extends DefaultManager
      * Getting CVEs names for host
      * @param $hostId
      * @param $tag = null -> all cves | true -> only tagged CVEs | false -> only CVEs without tag | string -> only tagged CVEs with tag name
+     * @param $running = true -> only CVEs of running pkgs | false -> only CVEs of installed but not running (kernel) pkgs
      * @return array of CVEs names
      */
-    public function getCvesNamesForHost($hostId, $tag = null)
+    public function getCvesNamesForHost($hostId, $tag = null, $running = true)
     {
         Utils::log(LOG_DEBUG, "Getting CVEs names for host[$hostId]", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("Cve");
-        return $dao->getNamesForHost($hostId, $tag);
+        return $dao->getNamesForHost($hostId, $tag, $running);
     }
 
     /**

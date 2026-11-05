@@ -100,33 +100,51 @@ class PkgsManager extends DefaultManager
 
     /**
      * Assign Pkgs with Host
+     * @param $pkgsRunning array pkgId => running (bool) of packages reported by the host
+     * @param $hostId
      */
-    public function assignPkgsWithHost($pkgsIds, $hostId, $installedPkgsIds = array())
+    public function assignPkgsWithHost($pkgsRunning, $hostId)
     {
         Utils::log(LOG_DEBUG, "Assign Pkgs with Host", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("Pkg");
 
-        $pkgsIdsToAdd = array_diff($pkgsIds, $installedPkgsIds);
-        $pkgsIdsToRemove = array_diff($installedPkgsIds, $pkgsIds);
-        foreach ($pkgsIdsToAdd as $pkgId) {
-            $dao->assignPkgToHost($pkgId, $hostId);
+        $installedRunning = $dao->getRunningFlagsForHost($hostId);
+
+        foreach ($pkgsRunning as $pkgId => $running) {
+            if (!array_key_exists($pkgId, $installedRunning)) {
+                $dao->assignPkgToHost($pkgId, $hostId, $running);
+            } elseif ($installedRunning[$pkgId] != $running) {
+                # e.g. host rebooted into another already installed kernel
+                $dao->setRunning($pkgId, $hostId, $running);
+            }
         }
-        foreach ($pkgsIdsToRemove as $pkgId) {
-            $dao->unassignPkgToHost($pkgId, $hostId);
+        foreach (array_keys($installedRunning) as $pkgId) {
+            if (!array_key_exists($pkgId, $pkgsRunning)) {
+                $dao->unassignPkgToHost($pkgId, $hostId);
+            }
         }
+    }
+
+    /**
+     * Get pkgId => running (bool) for all packages installed on the host
+     */
+    public function getRunningFlagsForHost($hostId)
+    {
+        return $this->getPakiti()->getDao("Pkg")->getRunningFlagsForHost($hostId);
     }
 
     /**
      * Getting vulnerable packages for host
      * @param $hostId
      * @param $tag = null -> all vulnerable pkgs | true -> only pkgs with tagged CVE | string -> tag name
+     * @param $running = true -> only running pkgs | false -> only installed but not running (kernel) pkgs
      * @return array of packages
      */
-    public function getVulnerablePkgsForHost($hostId, $tag = null)
+    public function getVulnerablePkgsForHost($hostId, $tag = null, $running = true)
     {
         Utils::log(LOG_DEBUG, "Getting vulnerable pkgs for host[$hostId]", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("Pkg");
-        $ids = $dao->getVulnerableIdsForHost($hostId, $tag);
+        $ids = $dao->getVulnerableIdsForHost($hostId, $tag, $running);
 
         $pkgs = array();
         foreach ($ids as $id) {

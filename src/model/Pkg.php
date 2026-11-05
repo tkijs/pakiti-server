@@ -17,6 +17,9 @@ class Pkg
     private $_archName;
     private $_pkgTypeName;
 
+    # Transient - per-host flag (InstalledPkg.running), not stored in the Pkg table.
+    private $_running = true;
+
     public function getVersionRelease()
     {
         if (!empty($this->_release)) {
@@ -107,5 +110,15 @@ class Pkg
     public function setPkgTypeName($val)
     {
         $this->_pkgTypeName = $val;
+    }
+
+    public function isRunning()
+    {
+        return $this->_running;
+    }
+
+    public function setRunning($val)
+    {
+        $this->_running = (bool) $val;
     }
 }

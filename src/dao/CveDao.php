@@ -73,7 +73,7 @@ class CveDao
         return $this->db->queryToSingleValueMultiRow($sql);
     }
 
-    public function getNamesForHost($hostId, $tag = null)
+    public function getNamesForHost($hostId, $tag = null, $running = true)
     {
         $select = "distinct(Cve.name)";
         $from = "Cve";
@@ -84,7 +84,7 @@ class CveDao
 
         # pkgs
         $join[] = "inner join PkgCveDef on CveCveDef.cveDefId = PkgCveDef.cveDefId";
-        $join[] = "inner join InstalledPkg on (PkgCveDef.pkgId = InstalledPkg.pkgId and InstalledPkg.hostId = '" . $this->db->escape($hostId) . "')";
+        $join[] = "inner join InstalledPkg on (PkgCveDef.pkgId = InstalledPkg.pkgId and InstalledPkg.hostId = '" . $this->db->escape($hostId) . "' and InstalledPkg.running = '" . ($running ? 1 : 0) . "')";
 
         # os
         $join[] = "inner join OsOsGroup on PkgCveDef.osGroupId = OsOsGroup.osGroupId";
@@ -147,7 +147,7 @@ class CveDao
         $join[] = "inner join CveCveDef on Cve.id = CveCveDef.cveId";
         $join[] = "inner join PkgCveDef on CveCveDef.cveDefId = PkgCveDef.cveDefId";
         $join[] = "inner join OsOsGroup on PkgCveDef.osGroupId = OsOsGroup.osGroupId";
-        $join[] = "inner join InstalledPkg on PkgCveDef.pkgId = InstalledPkg.pkgId";
+        $join[] = "inner join InstalledPkg on (PkgCveDef.pkgId = InstalledPkg.pkgId and InstalledPkg.running = '1')";
         $join[] = "inner join Host on InstalledPkg.hostId = Host.id";
         $join[] = "left join CveException on (Cve.name = CveException.cveName and PkgCveDef.pkgId = CveException.pkgId and PkgCveDef.osGroupId = CveException.osGroupId)";
         $where[] = "CveException.id IS NULL";

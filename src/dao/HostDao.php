@@ -273,7 +273,7 @@ class HostDao
         }
 
         if ($cveName != null || $tag != null) {
-            $join[] = "inner join InstalledPkg on InstalledPkg.hostId = Host.id";
+            $join[] = "inner join InstalledPkg on (InstalledPkg.hostId = Host.id and InstalledPkg.running = '1')";
             $join[] = "inner join PkgCveDef on PkgCveDef.pkgId = InstalledPkg.pkgId";
             $join[] = "inner join OsOsGroup on (PkgCveDef.osGroupId = OsOsGroup.osGroupId and OsOsGroup.osId = Host.osId)";
             $join[] = "inner join CveCveDef on PkgCveDef.cveDefId = CveCveDef.cveDefId";

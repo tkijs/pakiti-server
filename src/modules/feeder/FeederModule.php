@@ -20,6 +20,8 @@ class FeederModule extends DefaultModule
     private $_report_arch;
     private $_report_cpu;
     private $_report_kernel;
+    private $_report_running_kernel_pkgs;
+    private $_report_machine_arch;
     private $_report_type;
     private $_report_site;
     private $_report_tag;
@@ -120,6 +122,8 @@ class FeederModule extends DefaultModule
         if ($this->_reportProcessMode == Constants::$STORE_ONLY) {
             return "";
         }
+        # pkgId => running, only CVEs of running packages are reported back (not of installed but not running kernels)
+        $runningFlags = array();
         if ($this->_reportProcessMode == Constants::$REPORT_ONLY) {
             $pkgs = $this->_pkgs;
             $osId = $this->_host->getOsId();
@@ -127,6 +131,7 @@ class FeederModule extends DefaultModule
             $host = $this->getPakiti()->getManager("HostsManager")->getHostById($this->_host->getId());
             $pkgs = $this->getPakiti()->getManager("PkgsManager")->getPkgs(null, -1, -1, $host->getId());
             $osId = $host->getOsId();
+            $runningFlags = $this->getPakiti()->getManager("PkgsManager")->getRunningFlagsForHost($host->getId());
         }
 
         $cvesManager = $this->getPakiti()->getManager("CvesManager");
@@ -134,6 +139,9 @@ class FeederModule extends DefaultModule
 
         $result = "";
         foreach ($pkgs as $pkg) {
+            if (!$pkg->isRunning() || (isset($runningFlags[$pkg->getId()]) && !$runningFlags[$pkg->getId()])) {
+                continue;
+            }
             $cvesNames = $cvesManager->getCvesNamesForPkgAndOs($pkg->getId(), $osId, true);
             foreach ($cvesNames as $cveName) {
                 $cveTags = $cveTagsManager->getCveTagsByCveName($cveName);
@@ -263,9 +271,13 @@ class FeederModule extends DefaultModule
                             case "system":
                                 $this->_report_os = trim($fields[1]);
                                 break;
+                            case "running-kernel-pkgs":
+                                $this->_report_running_kernel_pkgs = trim($fields[1]);
+                                break;
                         }
                     }
 
+                    $this->_report_machine_arch = $this->_report_arch;
                     $this->_report_arch = implode(", ", array_filter([$this->_report_arch,$this->_report_cpu]));
 
                     while (($line = fgets($handle)) !== false) {
@@ -305,6 +317,7 @@ class FeederModule extends DefaultModule
         $this->_report_site = $data['tag'];
         $this->_report_tag = "";
         $this->_report_os = $data['content']['operatingsystem']['full_name'];
+        $this->_report_machine_arch = $this->_report_arch;
         $this->_report_arch = implode(", ", array_filter([$this->_report_arch,$this->_report_cpu]));
         foreach ($data['content']['softwares'] as $s) { $this->_report_pkgs .= $s['name']." ".$s['version']." ".$s['arch']."\n"; }
     }
@@ -443,8 +456,9 @@ class FeederModule extends DefaultModule
         $this->_host->setKernel($this->_report_kernel);
 
         # Parse the packages list
+        $machineArch = ($this->_report_machine_arch !== null) ? $this->_report_machine_arch : $this->_report_arch;
         $this->_pkgs = $this->parsePkgs($this->_report_pkgs, $this->_report_type, $this->_report_kernel,
-                                        $this->_report_arch, $this->_protocolVersion);
+                                        $machineArch, $this->_protocolVersion, $this->_report_running_kernel_pkgs);
 
         # Set the initial information about the report (using _pkgs)
         $this->_report->setNumOfInstalledPkgs(sizeof($this->_pkgs));
@@ -668,22 +682,21 @@ class FeederModule extends DefaultModule
         $vulnerabilitiesManager = $this->getPakiti()->getManager("VulnerabilitiesManager");
         $vulnerabilitiesManager->calculateVulnerabilitiesForPkgs($newPkgs);
 
-        # Assign pkgs with Host
+        # Assign pkgs with Host, together with the running flag (false for installed but not running kernels)
         if ($this->_host->getId() != -1) {
-            $pkgsIds = array_map(function ($pkg) {
-                return $pkg->getId();
-            }, $this->_pkgs);
-            $installedPkgsIds = array_map(function ($pkg) {
-                return $pkg->getId();
-            }, $installedPkgs);
-            $this->getPakiti()->getManager("PkgsManager")->assignPkgsWithHost(array_unique($pkgsIds), $this->_host->getId(), $installedPkgsIds);
+            $pkgsRunning = array();
+            foreach ($this->_pkgs as $pkg) {
+                $id = $pkg->getId();
+                $pkgsRunning[$id] = !empty($pkgsRunning[$id]) || $pkg->isRunning();
+            }
+            $this->getPakiti()->getManager("PkgsManager")->assignPkgsWithHost($pkgsRunning, $this->_host->getId());
         }
     }
 
     /**
      * Parse the long string containing list of installed packages.
      */
-    protected function parsePkgs($pkgs, $type, $kernel, $arch, $protocol_version)
+    protected function parsePkgs($pkgs, $type, $kernel, $arch, $protocol_version, $runningKernelPkgs = null)
     {
         Utils::log(LOG_DEBUG, "Parsing packages", __FILE__, __LINE__);
         $parsedPkgs = array();
@@ -692,6 +705,7 @@ class FeederModule extends DefaultModule
 
         $debian_kernel_found = False;
         $kernel_sent = false;
+        $runningHint = Utils::parseRunningKernelPkgsHint($runningKernelPkgs);
 
         # Go throught the string, each entry is separated by the new line
         $tok = strtok($pkgs, "\n");
@@ -738,45 +752,38 @@ class FeederModule extends DefaultModule
                     break;
             }
 
-            # Guess which package represents running kernel
-            if (in_array($pkgName, Config::$KERNEL_PACKAGES_NAMES)) {
-                # Remove epoch from the version
-                $versionWithoutEpoch = Utils::removeEpoch($pkgVersion);
-                # Compare result of the uname -r with the package version
-                # Due to some other strings clued to the kernel version, we are looking for substring
-                if (strpos($kernel, $versionWithoutEpoch . "-" . $pkgRelease) === false) {
-                    # This verion of the kernel isn't booted
-                    $tok = strtok("\n");
-                    continue;
-                }
-                $kernel_sent = true;
+            $pkgRunning = true;
+            if (in_array($pkgName, Config::$IGNORE_PACKAGES) && !in_array($pkgName, Config::$KERNEL_PACKAGES_NAMES)) {
+                $tok = strtok("\n");
+                continue;
+            }
 
-                # This is a hack to add a record for debian running kernel named "linux" in order for it to match vulnerability
-                # definitions. The client sends the kernel version which is part of the package name.
-                if (strpos($pkgName, "linux-image-".$kernel) !== false) {
-                    if ($debian_kernel_found) {
-                        /* there might be several packages for the kernel, let's act only on the first one */
-                        $tok = strtok("\n");
-                        continue;
+            if (Utils::isKernelPkg($pkgName)) {
+                # Kernel family: several versions can be installed side by side. Only the ones belonging
+                # to the running kernel are "running", the others are stored as installed but not running
+                # and their CVEs are never counted, tagged or notified.
+                $pkgRunning = Utils::isRunningKernelPkg($pkgName, $pkgVersion, $pkgRelease, $pkgArch, $type, $kernel, $arch, $runningHint);
+
+                if ($pkgRunning) {
+                    $kernel_sent = true;
+
+                    # This is a hack to add a record for debian running kernel named "linux" in order for it to match vulnerability
+                    # definitions. The client sends the kernel version which is part of the package name.
+                    if (!$debian_kernel_found && strpos($pkgName, "linux-image-") === 0 && strpos($pkgName, $kernel) !== false) {
+                        $deb_pkg = new Pkg();
+                        $deb_pkg->setName("linux");
+                        $deb_pkg->setArchName($pkgArch);
+                        $deb_pkg->setRelease($pkgRelease);
+                        $deb_pkg->setVersion($pkgVersion);
+                        $deb_pkg->setPkgTypeName($type);
+                        $parsedPkgs[] = $deb_pkg;
+
+                        $debian_kernel_found = True;
                     }
-                    $deb_pkg = new Pkg();
-                    $deb_pkg->setName("linux");
-                    $deb_pkg->setArchName($pkgArch);
-                    $deb_pkg->setRelease($pkgRelease);
-                    $deb_pkg->setVersion($pkgVersion);
-                    $deb_pkg->setPkgTypeName($type);
-                    $parsedPkgs[] = $deb_pkg;
-
-                    $debian_kernel_found = True;
                 }
             } else {
                 # Remove packages which match the patterns provided in the configuration.
                 # Note that kernel-related packages are stored even if they fit the patterns.
-                if (in_array($pkgName, Config::$IGNORE_PACKAGES)) {
-                    $tok = strtok("\n");
-                    continue;
-                }
-
                 $found = false;
                 foreach (Config::$IGNORE_PACKAGES_PATTERNS as $pkgNamePattern) {
                     if (preg_match("/$pkgNamePattern/", $pkgName) == 1) {
@@ -797,12 +804,14 @@ class FeederModule extends DefaultModule
             $pkg->setRelease($pkgRelease);
             $pkg->setVersion($pkgVersion);
             $pkg->setPkgTypeName($type);
+            $pkg->setRunning($pkgRunning);
             $parsedPkgs[] = $pkg;
 
             $tok = strtok("\n");
         }
 
-        /* Some deployments don't have kernel packages installed, we generate a fake record for them */
+        /* Some deployments don't have kernel packages installed (or none of them matches the running kernel),
+           we generate a fake record for them */
         if (! $kernel_sent) {
             /* XXX The code is RH-specific, I'm affraid */
             $pkg = new Pkg();
@@ -902,6 +911,7 @@ class FeederModule extends DefaultModule
             $this->_report_os .
             $this->_report_tag .
             $this->_report_kernel .
+            $this->_report_running_kernel_pkgs .
             $this->_report_arch .
             $this->_report_site;
         return $this->computeHash($header);

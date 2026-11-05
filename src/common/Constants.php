@@ -9,7 +9,7 @@
 final class Constants
 {
     public static $PAKITI_VERSION = "3.1.1";
-    public static $DB_VERSION = "20171026";
+    public static $DB_VERSION = "20261102";
     public static $CONFIG_VERSION = "20171019";
 
     # GitHub

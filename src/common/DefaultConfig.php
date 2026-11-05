@@ -73,6 +73,18 @@ class DefaultConfig
         "kernel-default-devel",
     );
 
+    # Regular expressions matching package names of the kernel family (in addition to $KERNEL_PACKAGES_NAMES).
+    public static $KERNEL_PACKAGES_PATTERNS = array(
+        # Red Hat, AlmaLinux, Rocky, Oracle, Fedora, SUSE
+        # e.g. kernel-core, kernel-modules-extra, kernel-rt-core, kernel-64k-modules, kernel-uek
+        # (kernel-devel is left out on purpose, it stays ignored by the .*-devel$ pattern as before)
+        "^kernel(-(rt|64k|uek|debug|default|preempt|azure|kvmsmall|zfcpdump|lpae|pae))?(-(core|modules|modules-core|modules-extra|modules-internal|modules-partner|uki-virt|uki-virt-addons|base|extra|optional))?$",
+        # Debian, Ubuntu - versioned packages (linux-image-6.1.0-18-amd64, linux-modules-6.8.0-45-generic, ...)
+        # and their metapackages (linux-image-amd64, linux-image-generic, ...)
+        "^linux-(image|modules|modules-extra|headers|objects|signatures|buildinfo|signed-image)-.+",
+        "^linux-(tools|cloud-tools)-[0-9].*",
+    );
+
     # List of packages which will be ignored by Pakiti
     public static $IGNORE_PACKAGES = array(
         "kernel-headers",
@@ -87,7 +99,7 @@ class DefaultConfig
     );
 
     # Also the ignore list, but using REGEXP, note that kernel-related packages
-    # (recognized by $KERNEL_PACKAGES_NAMES) are never ignored
+    # (recognized by $KERNEL_PACKAGES_NAMES or $KERNEL_PACKAGES_PATTERNS) are never ignored
     public static $IGNORE_PACKAGES_PATTERNS = array(
         ".*-devel$",
         ".*-doc$",
