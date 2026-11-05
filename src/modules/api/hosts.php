@@ -19,12 +19,37 @@ if ($_tag == null) {
 $_hostGroupId = $pakiti->getmanager("HostGroupsManager")->getHostGroupIdByName($hostGroupName);
 $_activity = Utils::getHttpGetVar("activity");
 
-$hosts = $pakiti->getManager("HostsManager")->getHosts(null, -1, -1, null, $_cveName, $_tag, $_hostGroupId, $_activity);
+$_notRunning = (Utils::getHttpGetVar("notRunning") == "true");
 
 $out = fopen('php://output', 'w');
 
 $values = array('tag', "cve", "site", "host", "os", "arch", "last_report");
 fputcsv($out, $values);
+
+if ($_notRunning) {
+    $hosts = $pakiti->getManager("HostsManager")->getHosts(null, -1, -1, null, null, null, $_hostGroupId, $_activity);
+    foreach ($hosts as $host) {
+        $cvesNames = $pakiti->getManager("CvesManager")->getCvesNamesForHost($host->getId(), null, false);
+        if (empty($cvesNames)) {
+            continue;
+        }
+        $lastReport = $pakiti->getManager("ReportsManager")->getReportById($host->getLastReportId());
+        $hostGroups = $pakiti->getManager("HostGroupsManager")->getHostGroupsByHost($host);
+        foreach ($hostGroups as $hostGroup) {
+            foreach ($cvesNames as $cveName) {
+                if ($_cveName != null && $_cveName != $cveName) {
+                    continue;
+                }
+                fputcsv($out, array("not-running", $cveName, $hostGroup->getName(), $host->getHostName(),
+                    $host->getOsName(), $host->getArchName(), ($lastReport != null) ? $lastReport->getProcessedOn() : ""));
+            }
+        }
+    }
+    fclose($out);
+    exit;
+}
+
+$hosts = $pakiti->getManager("HostsManager")->getHosts(null, -1, -1, null, $_cveName, $_tag, $_hostGroupId, $_activity);
 
 foreach ($hosts as $host) {
     $hostGroups = $pakiti->getManager("HostGroupsManager")->getHostGroupsByHost($host);

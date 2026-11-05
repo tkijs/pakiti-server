@@ -18,6 +18,7 @@ $html->setTitle("Host: " . $host->getHostname());
 $html->setNumOfEntities($pakiti->getManager("PkgsManager")->getPkgsCount($host->getId(), $_search));
 
 $pkgs = $pakiti->getManager("PkgsManager")->getPkgs($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $host->getId(), $_search);
+$runningFlags = $pakiti->getManager("PkgsManager")->getRunningFlagsForHost($host->getId());
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -112,15 +113,20 @@ $pkgs = $pakiti->getManager("PkgsManager")->getPkgs($html->getSortBy(), $html->g
                     <tbody class="bg-white divide-y divide-slate-200">
                         <?php foreach ($pkgs as $pkg) { ?>
                             <tr class="hover:bg-slate-50">
-                                <td class="px-4 py-3 whitespace-nowrap font-medium text-slate-900"><?php echo $pkg->getName(); ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap font-medium text-slate-900">
+                                    <?php echo htmlspecialchars($pkg->getName(), ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php if (isset($runningFlags[$pkg->getId()]) && !$runningFlags[$pkg->getId()]) { ?>
+                                        <span class="inline-flex items-center px-2 py-0.5 ml-1 rounded text-xs bg-slate-100 text-slate-500" title="Installed but not running kernel package, its CVEs are not counted">not running</span>
+                                    <?php } ?>
+                                </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <code class="inline-flex items-center px-2 py-1 rounded text-xs bg-slate-100 text-slate-800 font-mono">
-                                        <?php echo $pkg->getVersionRelease(); ?>
+                                        <?php echo htmlspecialchars($pkg->getVersionRelease(), ENT_QUOTES, 'UTF-8'); ?>
                                     </code>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-brand-100 text-brand-700">
-                                        <?php echo $pkg->getArchName(); ?>
+                                        <?php echo htmlspecialchars($pkg->getArchName(), ENT_QUOTES, 'UTF-8'); ?>
                                     </span>
                                 </td>
                             </tr>

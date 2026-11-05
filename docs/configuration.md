@@ -88,6 +88,18 @@ The mapping is specified by the OS_GROUPS_MAPPING configuration option and has t
 
     php /var/www/pakiti3/src/modules/cli/recalculateOsGroupsMapping.php
 
+## Kernel packages
+Several versions of kernel packages can be installed side by side, but only the running one matters. Packages
+recognized as kernel packages (`KERNEL_PACKAGES_NAMES` and the regular expressions in `KERNEL_PACKAGES_PATTERNS`)
+are matched against the running kernel (`uname -r`) and the `running-kernel-pkgs` header sent by the client.
+Kernel packages that are installed but not running are stored with the flag `running = 0`; their CVEs are not
+counted (#CVEs, #taggedCVEs), not tagged and not included in notifications. They can be displayed on the host CVEs
+page using the "Show CVEs of installed but not running kernel packages" checkbox, or via the `notRunning=true`
+parameter of `api/hosts.php`.
+
+Kernel packages are never ignored by `IGNORE_PACKAGES_PATTERNS`. A name listed explicitly in `IGNORE_PACKAGES`
+is ignored unless it is in `KERNEL_PACKAGES_NAMES`.
+
 ## Users
 In Config.php have to be set one of these modes user management
 

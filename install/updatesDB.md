@@ -1,3 +1,14 @@
+## 20171026 -> 20261102
+Kernel packages which are installed but not running are stored with `running` = 0, their CVEs are not counted, tagged or notified.
+```sql
+alter table `InstalledPkg` add column `running` tinyint(1) not null default 1;
+
+/* force re-evaluation of every host on its next report, otherwise unchanged reports are skipped and all rows keep running = 1 */
+update `Host` set `lastReportHeaderHash` = NULL, `lastReportPkgsHash` = NULL;
+
+update `PakitiAttributes` set `attrValue` = "20261102" where `attrName` = "dbVersion" and `attrValue` = "20171026";
+```
+
 ## 20261022
 ```sql
 alter table `Host` modify column `kernel` varchar(64) not null;

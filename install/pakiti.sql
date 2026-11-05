@@ -137,6 +137,7 @@ create table `Pkg` (
 create table `InstalledPkg` (
 	`pkgId` integer(10) not null,
 	`hostId` integer(10) not null,
+	`running` tinyint(1) not null default 1,
 	primary key (`pkgId`, `hostId`),
 	foreign key (`pkgId`) references Pkg(`id`) on delete cascade,
 	foreign key (`hostId`) references Host(`id`) on delete cascade
