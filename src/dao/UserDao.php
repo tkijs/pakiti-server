@@ -50,6 +50,12 @@ class UserDao
         return $this->db->queryToSingleValueMultiRow($sql);
     }
 
+    public function getAdminIds()
+    {
+        $sql = "select id from User where admin = 1";
+        return $this->db->queryToSingleValueMultiRow($sql);
+    }
+
     public function update(User $user)
     {
         $sql = "update User set 

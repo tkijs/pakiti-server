@@ -51,6 +51,76 @@ class HostsManager extends DefaultManager
     }
 
     /**
+     * Get hosts sharing the same hostname, as array(hostname => Host[]),
+     * each list ordered newest report first.
+     * With $userId only hosts accessible to that user are returned, so a list
+     * can have a single entry when the other copies are in foreign host groups.
+     */
+    public function getDuplicateHosts($userId = -1)
+    {
+        Utils::log(LOG_DEBUG, "Getting duplicate hosts", __FILE__, __LINE__);
+        $dao = $this->getPakiti()->getDao("Host");
+        $duplicates = array();
+        foreach ($dao->getDuplicateHostnames() as $hostname) {
+            $hosts = array();
+            foreach ($dao->getIdsByHostname($hostname) as $id) {
+                $host = $dao->getById($id, $userId);
+                if ($host != null) {
+                    $hosts[] = $host;
+                }
+            }
+            if (count($hosts) > ($userId == -1 ? 1 : 0)) {
+                $duplicates[$hostname] = $hosts;
+            }
+        }
+        return $duplicates;
+    }
+
+    /**
+     * Get hosts whose reporterHostname is only the reporter IP (failed reverse DNS)
+     */
+    public function getHostsWithUnresolvedReporter($userId = -1)
+    {
+        Utils::log(LOG_DEBUG, "Getting hosts with unresolved reporter hostname", __FILE__, __LINE__);
+        $dao = $this->getPakiti()->getDao("Host");
+        $hosts = array();
+        foreach ($dao->getUnresolvedReporterIds() as $id) {
+            $host = $dao->getById($id, $userId);
+            if ($host != null) {
+                $hosts[] = $host;
+            }
+        }
+        return $hosts;
+    }
+
+    /**
+     * Other Host rows with the same hostname as $host (accessible to $userId)
+     */
+    public function getOtherHostsWithSameHostname(Host $host, $userId = -1)
+    {
+        $dao = $this->getPakiti()->getDao("Host");
+        $hosts = array();
+        foreach ($dao->getIdsByHostname($host->getHostname()) as $id) {
+            if ($id == $host->getId()) {
+                continue;
+            }
+            $other = $dao->getById($id, $userId);
+            if ($other != null) {
+                $hosts[] = $other;
+            }
+        }
+        return $hosts;
+    }
+
+    /**
+     * Number of Host rows with the given hostname (regardless of access)
+     */
+    public function getHostsCountByHostname($hostname)
+    {
+        return count($this->getPakiti()->getDao("Host")->getIdsByHostname($hostname));
+    }
+
+    /**
      * Get hosts
      */
     public function getHosts($orderBy = null, $orderByDirection = null, $pageSize = -1, $pageNum = -1, $search = null, $cveName = null, $tag = null, $hostGroupId = -1, $activity = null, $pkgId = -1, $userId = -1, $directlyAssignedToUser = false)

@@ -121,6 +121,41 @@ class HostDao
         return $id;
     }
 
+    /**
+     * Hostnames that are stored in more than one Host row
+     */
+    public function getDuplicateHostnames()
+    {
+        $sql = "select hostname from Host
+            group by hostname
+            having count(*) > 1
+            order by hostname";
+        return $this->db->queryToSingleValueMultiRow($sql);
+    }
+
+    /**
+     * IDs of all Host rows with the given hostname, newest report first
+     */
+    public function getIdsByHostname($hostname)
+    {
+        $sql = "select id from Host
+            where hostname='".$this->db->escape($hostname)."'
+            order by lastReportId desc, id desc";
+        return $this->db->queryToSingleValueMultiRow($sql);
+    }
+
+    /**
+     * IDs of Host rows whose reporterHostname is just the reporter IP
+     * (reverse DNS lookup failed when the report was received)
+     */
+    public function getUnresolvedReporterIds()
+    {
+        $sql = "select id from Host
+            where reporterHostname = reporterIp
+            order by hostname, id";
+        return $this->db->queryToSingleValueMultiRow($sql);
+    }
+
     public function getById($id, $userId = -1)
     {
         # Try to find the host in the DB

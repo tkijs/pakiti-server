@@ -65,6 +65,20 @@ class UsersManager extends DefaultManager
         return $users;
     }
 
+    public function getAdmins()
+    {
+        Utils::log(LOG_DEBUG, "Getting admin users", __FILE__, __LINE__);
+        $dao = $this->getPakiti()->getDao("User");
+        $users = array();
+        foreach ($dao->getAdminIds() as $id) {
+            $user = $dao->getById($id);
+            if ($user != null) {
+                array_push($users, $user);
+            }
+        }
+        return $users;
+    }
+
     public function getUsersCount()
     {
         Utils::log(LOG_DEBUG, "Counting users", __FILE__, __LINE__);

@@ -19,6 +19,9 @@ $report = $html->getPakiti()->getManager("ReportsManager")->getReportById($host-
 $hostGroups = $html->getPakiti()->getManager("HostGroupsManager")->getHostGroupsByHost($host);
 $reportsCount = $html->getPakiti()->getManager("ReportsManager")->getHostReportsCount($host->getId());
 $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getId());
+$otherEntries = $pakiti->getManager("HostsManager")->getOtherHostsWithSameHostname($host, $html->getUserId());
+$otherEntriesTotal = $pakiti->getManager("HostsManager")->getHostsCountByHostname($host->getHostname()) - 1;
+$reporterUnresolved = ($host->getReporterHostname() == $host->getReporterIp());
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,6 +82,36 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <?php if ($otherEntriesTotal > 0): ?>
+        <!-- Duplicated host warning -->
+        <div class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div class="flex items-center gap-3">
+                <i data-feather="alert-triangle" class="w-5 h-5 flex-shrink-0 text-amber-600"></i>
+                <span>This host is stored <b><?php echo $otherEntriesTotal + 1; ?></b> times (same hostname, different ip or reporter).
+                    <a href="hosts.php?duplicates=1" class="font-medium underline hover:text-amber-900">Review duplicates</a></span>
+            </div>
+            <ul class="mt-2 ml-8 list-disc space-y-0.5">
+                <?php foreach ($otherEntries as $other): ?>
+                    <?php
+                    $otherReport = null;
+                    if ($other->getLastReportId() != null && $other->getLastReportId() != -1) {
+                        $otherReport = $pakiti->getManager("ReportsManager")->getReportById($other->getLastReportId());
+                    }
+                    ?>
+                    <li>
+                        <a href="host.php?hostId=<?php echo $other->getId(); ?>" class="underline hover:text-amber-900">#<?php echo $other->getId(); ?></a>
+                        reporter <code><?php echo htmlspecialchars($other->getReporterHostname()); ?></code>
+                        (<?php echo htmlspecialchars($other->getReporterIp()); ?>),
+                        last report <?php echo $otherReport ? $otherReport->getReceivedOn() : "-"; ?>
+                    </li>
+                <?php endforeach; ?>
+                <?php if ($otherEntriesTotal > count($otherEntries)): ?>
+                    <li><?php echo $otherEntriesTotal - count($otherEntries); ?> more not in your host groups</li>
+                <?php endif; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+
         <!-- Stats Cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="bg-white rounded-lg shadow border border-slate-200 p-4">
@@ -172,7 +205,12 @@ $pkgs = $pakiti->getManager("PkgsManager")->getVulnerablePkgsForHost($host->getI
                 <div class="divide-y divide-slate-200">
                     <div class="px-6 py-4 flex items-center justify-between">
                         <span class="text-sm font-medium text-slate-500">Reporter Hostname</span>
-                        <span class="text-sm text-slate-900"><?php echo $host->getReporterHostname(); ?></span>
+                        <span class="text-sm text-slate-900">
+                            <?php echo htmlspecialchars($host->getReporterHostname()); ?>
+                            <?php if ($reporterUnresolved): ?>
+                                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Reverse DNS lookup of the reporting address failed. The host will be stored again as a new entry once the address resolves.">not resolved</span>
+                            <?php endif; ?>
+                        </span>
                     </div>
                     <div class="px-6 py-4 flex items-center justify-between">
                         <span class="text-sm font-medium text-slate-500">Reporter IP</span>

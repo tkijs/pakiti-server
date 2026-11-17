@@ -92,6 +92,19 @@ foreach ($hostGroups as $g) {
     $hostGroupNameMap[$g->getId()] = $g->getName();
 }
 #$cveNames = $pakiti->getManager("CvesManager")->getCvesNames(true);
+
+// Duplicated hosts (same hostname stored more than once) and hosts whose
+// reporter hostname is only an IP (failed reverse DNS, will duplicate later)
+$_duplicates = ($html->getHttpGetVar("duplicates", null) == "1");
+$duplicateHosts = $pakiti->getManager("HostsManager")->getDuplicateHosts($html->getUserId());
+$unresolvedHosts = array();
+foreach ($pakiti->getManager("HostsManager")->getHostsWithUnresolvedReporter($html->getUserId()) as $h) {
+    if (!isset($duplicateHosts[$h->getHostname()])) {
+        $unresolvedHosts[] = $h;
+    }
+}
+$duplicatesCount = count($duplicateHosts);
+$unresolvedCount = count($unresolvedHosts);
 $tagNames = $pakiti->getManager("CveTagsManager")->getTagNames();
 $activity = array("All Activity" => "", "Last 24 hours" => "24h", "Last 2 days" => "2d", "Last week" => "1w", "Inactive 48 hours" => "-48h", "Inactive 7 days" => "-7d");
 
@@ -270,6 +283,138 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
             <main class="flex-1 relative overflow-y-auto focus:outline-none py-6">
                 <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
                     
+                    <!-- Duplicated hosts banner -->
+                    <?php if (($duplicatesCount > 0 || $unresolvedCount > 0) && !$_duplicates): ?>
+                    <div class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3 text-sm text-amber-800">
+                            <i data-feather="alert-triangle" class="w-5 h-5 flex-shrink-0 text-amber-600"></i>
+                            <span>
+                                <?php if ($duplicatesCount > 0): ?>
+                                    <b><?php echo $duplicatesCount; ?></b> host<?php echo ($duplicatesCount != 1 ? 's are' : ' is'); ?> stored more than once
+                                <?php endif; ?>
+                                <?php if ($duplicatesCount > 0 && $unresolvedCount > 0): ?> &middot; <?php endif; ?>
+                                <?php if ($unresolvedCount > 0): ?>
+                                    <b><?php echo $unresolvedCount; ?></b> host<?php echo ($unresolvedCount != 1 ? 's have' : ' has'); ?> an unresolved reporter hostname
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <a href="hosts.php?duplicates=1" class="inline-flex items-center gap-1 rounded-md bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800 whitespace-nowrap">
+                            Review <i data-feather="arrow-right" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($_duplicates): ?>
+                    <!-- Duplicated hosts review -->
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-xl font-bold text-slate-900">Duplicated hosts</h2>
+                        <a href="hosts.php" class="inline-flex items-center gap-1 text-sm text-brand-600 hover:underline">
+                            <i data-feather="arrow-left" class="w-4 h-4"></i> All hosts
+                        </a>
+                    </div>
+                    <p class="text-sm text-slate-600 mb-4">
+                        A host is stored again whenever its ip, reporter hostname or reporter ip changes. The reporter hostname is the
+                        reverse DNS name of the address the report came from, so a host whose address gets a PTR record later
+                        (typically IPv6) appears twice. Keep the newest entry and delete the obsolete ones.
+                    </p>
+
+                    <?php if ($duplicatesCount == 0 && $unresolvedCount == 0): ?>
+                        <div class="bg-white shadow rounded-lg border border-slate-200 px-6 py-8 text-center text-sm text-slate-500 mb-4">No duplicated hosts found.</div>
+                    <?php endif; ?>
+
+                    <?php foreach ($duplicateHosts as $dupHostname => $dupList): ?>
+                    <?php $dupTotal = $pakiti->getManager("HostsManager")->getHostsCountByHostname($dupHostname); ?>
+                    <div class="bg-white shadow overflow-hidden rounded-lg border border-slate-200 mb-4">
+                        <div class="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                            <span class="text-sm font-medium text-slate-900"><?php echo htmlspecialchars($dupHostname); ?></span>
+                            <span class="text-xs text-slate-500"><?php echo $dupTotal; ?> entries<?php if ($dupTotal > count($dupList)) echo ", " . ($dupTotal - count($dupList)) . " not in your host groups"; ?></span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">IP</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Reporter Hostname</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Reporter IP</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Host Groups</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Last Report</th>
+                                        <th class="px-3 py-2 text-right font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-slate-200">
+                                    <?php $dupFirst = true; foreach ($dupList as $dupHost): ?>
+                                    <?php
+                                    $dupReport = null;
+                                    if ($dupHost->getLastReportId() != null && $dupHost->getLastReportId() != -1) {
+                                        $dupReport = $pakiti->getManager("ReportsManager")->getReportById($dupHost->getLastReportId());
+                                    }
+                                    $dupGroups = $pakiti->getManager("HostGroupsManager")->getHostGroupsByHost($dupHost);
+                                    $dupUnresolved = ($dupHost->getReporterHostname() == $dupHost->getReporterIp());
+                                    ?>
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-3 py-1 whitespace-nowrap">
+                                            <a href="host.php?hostId=<?php echo $dupHost->getId(); ?>" class="font-medium text-brand-600 hover:underline"><?php echo $dupHost->getId(); ?></a>
+                                            <?php if ($dupFirst): ?><span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">newest</span><?php endif; ?>
+                                        </td>
+                                        <td class="px-3 py-1 whitespace-nowrap"><?php echo htmlspecialchars($dupHost->getIp()); ?></td>
+                                        <td class="px-3 py-1 whitespace-nowrap">
+                                            <?php echo htmlspecialchars($dupHost->getReporterHostname()); ?>
+                                            <?php if ($dupUnresolved): ?><span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Reverse DNS lookup failed">not resolved</span><?php endif; ?>
+                                        </td>
+                                        <td class="px-3 py-1 whitespace-nowrap"><?php echo htmlspecialchars($dupHost->getReporterIp()); ?></td>
+                                        <td class="px-3 py-1 whitespace-nowrap">
+                                            <?php foreach ($dupGroups as $g): ?>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 mr-1"><?php echo htmlspecialchars($g->getName()); ?></span>
+                                            <?php endforeach; ?>
+                                        </td>
+                                        <td class="px-3 py-1 whitespace-nowrap"><?php echo $dupReport ? $dupReport->getReceivedOn() : "-"; ?></td>
+                                        <td class="px-3 py-1 whitespace-nowrap text-right">
+                                            <button type="button" class="text-red-600 hover:text-red-900" title="Delete this entry" aria-label="Delete entry <?php echo $dupHost->getId(); ?>" onclick="confirmDelete(<?php echo $dupHost->getId(); ?>, '<?php echo htmlspecialchars($dupHost->getHostname() . " (id " . $dupHost->getId() . ")"); ?>')">
+                                                <i data-feather="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <?php $dupFirst = false; endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+
+                    <?php if ($unresolvedCount > 0): ?>
+                    <h3 class="text-base font-semibold text-slate-900 mt-6 mb-1">Unresolved reporter hostname</h3>
+                    <p class="text-sm text-slate-600 mb-3">The reverse DNS lookup of these hosts' reporting address failed, so the address itself is stored as reporter hostname. Once it resolves, the host will be stored again as a new entry. Add a PTR record for the address to avoid that.</p>
+                    <div class="bg-white shadow overflow-hidden rounded-lg border border-slate-200 mb-4">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-xs">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Hostname</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Reporter IP</th>
+                                        <th class="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider">Host Groups</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-slate-200">
+                                    <?php foreach ($unresolvedHosts as $uHost): ?>
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-3 py-1 whitespace-nowrap"><a href="host.php?hostId=<?php echo $uHost->getId(); ?>" class="font-medium text-brand-600 hover:underline"><?php echo htmlspecialchars($uHost->getHostname()); ?></a></td>
+                                        <td class="px-3 py-1 whitespace-nowrap"><?php echo htmlspecialchars($uHost->getReporterIp()); ?></td>
+                                        <td class="px-3 py-1 whitespace-nowrap">
+                                            <?php foreach ($pakiti->getManager("HostGroupsManager")->getHostGroupsByHost($uHost) as $g): ?>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 mr-1"><?php echo htmlspecialchars($g->getName()); ?></span>
+                                            <?php endforeach; ?>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php else: ?>
+
                     <!-- Filters -->
                     <form action="" method="get" id="filter-form" class="bg-white shadow rounded-lg mb-6 overflow-hidden autocomplete="on">
                         <div class="p-4 border-b border-slate-200 flex items-center justify-between">
@@ -632,6 +777,7 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
                             </div>
                         </div>
                     </div>
+                    <?php endif; /* !$_duplicates */ ?>
                     
                     <!-- Footer -->
                     <footer class="mt-8 border-t border-slate-200 pt-6 pb-4">

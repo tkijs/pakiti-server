@@ -87,6 +87,16 @@ Linux distibutions.
     
     30 4 * * * root php /var/www/pakiti-server/src/modules/cli/vds.php -c synchronize && php /var/www/pakiti-server/src/modules/cli/calculateVulnerabilities.php
 
+### Duplicated hosts notification
+A host is stored as a new entry whenever its hostname, ip, reporter hostname or reporter ip changes. The reporter
+hostname is the reverse DNS name of the address the report came from, so a client whose address gets a PTR record only later (typically IPv6) appears twice. `notifyDuplicateHosts.php` detects such hosts, and hosts whose reporter hostname is still only an IP address, and emails Pakiti admins and users of the affected host groups. It does not change anything.
+
+Run it once a week, e.g. with a systemd timer or a cron entry such as:
+
+    0 7 * * 1 apache php /var/www/pakiti-server/src/modules/cli/notifyDuplicateHosts.php
+
+Use `--dry-run` to print the emails instead of sending them and `--no-unresolved` to report only actual duplicates.
+
 ## Getting started with Pakiti
 
 In order to ease initial configuration of the Pakiti server, you can use the provided script:
