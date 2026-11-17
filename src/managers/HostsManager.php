@@ -121,6 +121,149 @@ class HostsManager extends DefaultManager
     }
 
     /**
+     * Describe what merging host $fromId into host $intoId would do.
+     * Returns array with 'errors' (non-empty = the merge is not allowed) and,
+     * when allowed, the details shown to the user before confirming.
+     *
+     * Rules: both hosts exist and are accessible to $userId, they have the same
+     * hostname and $intoId is the newest entry of that hostname (the one the
+     * feeder matches new reports to).
+     */
+    public function getMergePlan($fromId, $intoId, $userId = -1)
+    {
+        $plan = array('errors' => array());
+        $fromId = (int)$fromId;
+        $intoId = (int)$intoId;
+
+        if ($fromId <= 0 || $intoId <= 0 || $fromId == $intoId) {
+            $plan['errors'][] = "Choose two different hosts to merge.";
+            return $plan;
+        }
+
+        $dao = $this->getPakiti()->getDao("Host");
+        $from = $dao->getById($fromId, $userId);
+        $into = $dao->getById($intoId, $userId);
+        if ($from == null || $into == null) {
+            $plan['errors'][] = "Host #" . ($from == null ? $fromId : $intoId) . " doesn't exist or access denied.";
+            return $plan;
+        }
+        if ($from->getHostname() != $into->getHostname()) {
+            $plan['errors'][] = "Hosts #$fromId and #$intoId have different hostnames.";
+            return $plan;
+        }
+        $ids = $dao->getIdsByHostname($into->getHostname());
+        if (empty($ids) || $ids[0] != $intoId) {
+            $plan['errors'][] = "Host #$intoId is not the newest entry of " . $into->getHostname()
+                . ", merge into #" . (empty($ids) ? "?" : $ids[0]) . " instead.";
+            return $plan;
+        }
+
+        $reportsManager = $this->getPakiti()->getManager("ReportsManager");
+        $hostGroupsManager = $this->getPakiti()->getManager("HostGroupsManager");
+        $usersManager = $this->getPakiti()->getManager("UsersManager");
+
+        $lastReport = function ($host) use ($reportsManager) {
+            $id = $host->getLastReportId();
+            if (empty($id) || $id == -1) {
+                return null;
+            }
+            $report = $reportsManager->getReportById($id);
+            return ($report == null ? null : $report->getReceivedOn());
+        };
+        $groupNames = function ($host) use ($hostGroupsManager) {
+            $names = array();
+            foreach ($hostGroupsManager->getHostGroupsByHost($host) as $g) {
+                if ($g != null) {
+                    $names[] = $g->getName();
+                }
+            }
+            return $names;
+        };
+
+        $intoUserIds = $dao->getDirectlyAssignedUserIds($intoId);
+        $usersToCopy = array();
+        foreach ($dao->getDirectlyAssignedUserIds($fromId) as $uid) {
+            if (in_array($uid, $intoUserIds)) {
+                continue;
+            }
+            $user = $usersManager->getUserById($uid);
+            $usersToCopy[] = ($user == null ? "#$uid" : $user->getName() . " (" . $user->getUid() . ")");
+        }
+
+        $plan['from'] = $from;
+        $plan['into'] = $into;
+        $plan['fromLastReport'] = $lastReport($from);
+        $plan['intoLastReport'] = $lastReport($into);
+        $plan['fromReports'] = $dao->getReportsSummary($fromId);
+        $plan['intoReports'] = $dao->getReportsSummary($intoId);
+        $plan['usersToCopy'] = $usersToCopy;
+        $plan['fromPkgs'] = $dao->getInstalledPkgsCount($fromId);
+        $plan['intoPkgs'] = $dao->getInstalledPkgsCount($intoId);
+        $plan['fromGroups'] = $groupNames($from);
+        $plan['intoGroups'] = $groupNames($into);
+        return $plan;
+    }
+
+    /**
+     * Merge host $fromId into host $intoId (see getMergePlan() for the rules).
+     *
+     * Steps 1-3 run in one transaction, step 4 verifies the result after the
+     * commit. Returns array('plan' => ..., 'steps' => array(1 => text, ...)).
+     * On failure throws an Exception whose code is the failed step (0 = the
+     * merge was not allowed); a failure in steps 0-3 changed nothing.
+     */
+    public function mergeHosts($fromId, $intoId, $userId = -1)
+    {
+        $plan = $this->getMergePlan($fromId, $intoId, $userId);
+        if (!empty($plan['errors'])) {
+            throw new Exception(implode(" ", $plan['errors']), 0);
+        }
+        $from = $plan['from']->getId();
+        $into = $plan['into']->getId();
+
+        Utils::log(LOG_INFO, "Merging host [id=$from] into host [id=$into, hostname=" . $plan['into']->getHostname() . "]", __FILE__, __LINE__);
+        $dao = $this->getPakiti()->getDao("Host");
+        $db = $this->getPakiti()->getManager("DbManager");
+        $steps = array();
+        $step = 1;
+
+        $db->begin();
+        try {
+            $moved = $dao->moveReports($from, $into);
+            $steps[1] = "$moved report" . ($moved != 1 ? "s" : "") . " moved to #$into";
+
+            $step = 2;
+            $copied = $dao->copyDirectlyAssignedUsers($from, $into);
+            $steps[2] = ($copied > 0 ? "$copied user assignment" . ($copied != 1 ? "s" : "") . " copied to #$into" : "Nothing to copy");
+
+            $step = 3;
+            if ($dao->delete($from) != 1) {
+                throw new Exception("Host #$from could not be deleted (already removed?)");
+            }
+            $steps[3] = "#$from removed with its " . $plan['fromPkgs'] . " outdated package rows";
+
+            $db->commit();
+        } catch (Exception $e) {
+            $db->rollback();
+            Utils::log(LOG_ERR, "Merging host [id=$from] into [id=$into] failed in step $step: " . $e->getMessage(), __FILE__, __LINE__);
+            throw new Exception($e->getMessage(), $step);
+        }
+
+        $step = 4;
+        $left = array_filter($dao->countReferences($from));
+        if (!empty($left)) {
+            $what = array();
+            foreach ($left as $table => $count) {
+                $what[] = "$table: $count";
+            }
+            throw new Exception("Merged, but rows still reference #$from (" . implode(", ", $what) . ")", 4);
+        }
+        $steps[4] = "Nothing references #$from anymore";
+
+        return array('plan' => $plan, 'steps' => $steps);
+    }
+
+    /**
      * Get hosts
      */
     public function getHosts($orderBy = null, $orderByDirection = null, $pageSize = -1, $pageNum = -1, $search = null, $cveName = null, $tag = null, $hostGroupId = -1, $activity = null, $pkgId = -1, $userId = -1, $directlyAssignedToUser = false)

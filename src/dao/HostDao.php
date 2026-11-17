@@ -156,6 +156,76 @@ class HostDao
         return $this->db->queryToSingleValueMultiRow($sql);
     }
 
+    /**
+     * Number of reports of the host and the receivedOn of its first and last one
+     */
+    public function getReportsSummary($hostId)
+    {
+        $sql = "select count(*) as cnt, min(Report.receivedOn) as firstOn, max(Report.receivedOn) as lastOn from ReportHost
+            inner join Report on Report.id = ReportHost.reportId
+            where ReportHost.hostId='".$this->db->escape($hostId)."'";
+        $row = $this->db->queryToSingleRow($sql);
+        return array(
+            'count' => ($row == null ? 0 : (int)$row['cnt']),
+            'first' => ($row == null ? null : $row['firstOn']),
+            'last'  => ($row == null ? null : $row['lastOn']),
+        );
+    }
+
+    /**
+     * IDs of users assigned directly to the host (UserHost)
+     */
+    public function getDirectlyAssignedUserIds($hostId)
+    {
+        $sql = "select userId from UserHost
+            where hostId='".$this->db->escape($hostId)."'";
+        return $this->db->queryToSingleValueMultiRow($sql);
+    }
+
+    /**
+     * Number of InstalledPkg rows of the host
+     */
+    public function getInstalledPkgsCount($hostId)
+    {
+        $sql = "select count(*) from InstalledPkg
+            where hostId='".$this->db->escape($hostId)."'";
+        return (int)$this->db->queryToSingleValue($sql);
+    }
+
+    /**
+     * Merge steps (call inside a transaction, in this order; deleting the old
+     * host with delete() then cascades its InstalledPkg, HostHostGroup, UserHost
+     * and leftover ReportHost rows). Each returns the number of affected rows.
+     */
+    public function moveReports($fromId, $intoId)
+    {
+        $this->db->query("update ignore ReportHost set hostId='".$this->db->escape($intoId)."'
+            where hostId='".$this->db->escape($fromId)."'");
+        return $this->db->getNumberOfAffectedRows();
+    }
+
+    public function copyDirectlyAssignedUsers($fromId, $intoId)
+    {
+        $this->db->query("insert ignore into UserHost (userId, hostId)
+            select userId, '".$this->db->escape($intoId)."' from UserHost
+            where hostId='".$this->db->escape($fromId)."'");
+        return $this->db->getNumberOfAffectedRows();
+    }
+
+    /**
+     * Rows that still reference the host (Host row itself included), per table
+     */
+    public function countReferences($hostId)
+    {
+        $id = $this->db->escape($hostId);
+        $counts = array();
+        foreach (array("Host" => "id", "ReportHost" => "hostId", "InstalledPkg" => "hostId",
+                       "HostHostGroup" => "hostId", "UserHost" => "hostId") as $table => $column) {
+            $counts[$table] = (int)$this->db->queryToSingleValue("select count(*) from `$table` where `$column`='$id'");
+        }
+        return $counts;
+    }
+
     public function getById($id, $userId = -1)
     {
         # Try to find the host in the DB

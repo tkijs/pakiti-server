@@ -53,6 +53,38 @@ switch ($html->getHttpPostVar("act")) {
         $html->setError("Cannot delete host. ID does not exist or access denied.");
     }
     break;
+  case "merge":
+    $_ajax = ($html->getHttpPostVar("ajax") == "1");
+    try {
+        $merge = $pakiti->getManager("HostsManager")->mergeHosts(
+            $html->getHttpPostVar("mergeFrom"), $html->getHttpPostVar("mergeInto"), $html->getUserId());
+        $into = $merge['plan']['into']->getId();
+        $from = $merge['plan']['from']->getId();
+        $done = "hosts.php?duplicates=1&merged=" . $into . "&mergedFrom=" . $from
+            . "&movedReports=" . $merge['plan']['fromReports']['count']
+            . "&copiedUsers=" . count($merge['plan']['usersToCopy']);
+        if ($_ajax) {
+            header("Content-Type: application/json");
+            echo json_encode(array('ok' => true, 'steps' => $merge['steps'], 'next' => $done));
+            exit;
+        }
+        // Redirect to avoid POST resubmission, keep a short summary in the URL
+        header("Location: " . $done);
+        exit;
+    } catch (Exception $e) {
+        if ($_ajax) {
+            header("Content-Type: application/json");
+            echo json_encode(array(
+                'ok' => false,
+                'failedStep' => $e->getCode(),
+                'rolledBack' => ($e->getCode() < 4),
+                'error' => $e->getMessage(),
+            ));
+            exit;
+        }
+        $_mergeError = $e->getMessage();
+    }
+    break;
 }
 
 // Check if entered CVE exists in database
@@ -104,6 +136,21 @@ foreach ($pakiti->getManager("HostsManager")->getHostsWithUnresolvedReporter($ht
     }
 }
 $duplicatesCount = count($duplicateHosts);
+
+// Merge of two duplicated entries: plan shown before confirming, result after
+$_mergeFrom = (int)$html->getHttpGetVar("mergeFrom", 0);
+$_mergeInto = (int)$html->getHttpGetVar("mergeInto", 0);
+$mergePlan = null;
+if ($_duplicates && $_mergeFrom > 0 && $_mergeInto > 0) {
+    $mergePlan = $pakiti->getManager("HostsManager")->getMergePlan($_mergeFrom, $_mergeInto, $html->getUserId());
+}
+if (!isset($_mergeError)) {
+    $_mergeError = null;
+}
+$_merged = (int)$html->getHttpGetVar("merged", 0);
+$_mergedFrom = (int)$html->getHttpGetVar("mergedFrom", 0);
+$_movedReports = (int)$html->getHttpGetVar("movedReports", 0);
+$_copiedUsers = (int)$html->getHttpGetVar("copiedUsers", 0);
 $unresolvedCount = count($unresolvedHosts);
 $tagNames = $pakiti->getManager("CveTagsManager")->getTagNames();
 $activity = array("All Activity" => "", "Last 24 hours" => "24h", "Last 2 days" => "2d", "Last week" => "1w", "Inactive 48 hours" => "-48h", "Inactive 7 days" => "-7d");
@@ -196,6 +243,33 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
             .sidebar-collapsed nav a, .sidebar-collapsed #sidebar-header .sidebar-brand, .sidebar-collapsed #sidebar-footer a { justify-content: flex-start !important; }
             .sidebar-collapsed #sidebar-toggle-btn { display: none; }
         }
+        /* Merge stepper: each bubble fills up from the bottom, the line to the next one follows */
+        .merge-steps { display: flex; flex-direction: column; }
+        .merge-step { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+        .merge-step:last-child { padding-bottom: 0; }
+        .merge-step:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 34px; bottom: 2px; width: 2px; background: #e2e8f0; }
+        .merge-step:not(:last-child)::after { content: ""; position: absolute; left: 15px; top: 34px; width: 2px; height: 0; background: #10b981; transition: height .35s ease-out; }
+        .merge-step.is-done:not(:last-child)::after { height: calc(100% - 36px); }
+        .merge-bubble { position: relative; flex-shrink: 0; width: 32px; height: 32px; border-radius: 9999px; border: 2px solid #cbd5e1; background: #ffffff;
+            color: #475569; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; overflow: hidden;
+            transition: border-color .3s, color .3s; }
+        .merge-bubble::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: #10b981; transition: height .7s ease-in-out; }
+        .merge-num { position: relative; }
+        .merge-step.is-running .merge-bubble { border-color: #10b981; color: #065f46; }
+        .merge-step.is-running .merge-bubble::before { height: 55%; }
+        .merge-step.is-done .merge-bubble { border-color: #10b981; color: #ffffff; }
+        .merge-step.is-done .merge-bubble::before { height: 100%; }
+        .merge-step.is-failed .merge-bubble { border-color: #dc2626; color: #ffffff; }
+        .merge-step.is-failed .merge-bubble::before { height: 100%; background: #dc2626; transition: none; }
+        .merge-step.is-undone .merge-bubble { border-color: #cbd5e1; color: #64748b; border-style: dashed; }
+        .merge-step.is-undone .merge-bubble::before { height: 0; transition: none; }
+        .merge-step.is-undone::after { height: 0 !important; }
+        .merge-body { flex: 1 1 auto; min-width: 0; padding-top: 5px; }
+        .merge-result { margin: 4px 0 0; font-size: 13px; font-weight: 500; display: none; }
+        .merge-step.is-done .merge-result { display: block; color: #047857; }
+        .merge-step.is-failed .merge-result { display: block; color: #b91c1c; }
+        .merge-step.is-undone .merge-result { display: block; color: #64748b; text-decoration: line-through; }
+        @media (prefers-reduced-motion: reduce) { .merge-bubble::before, .merge-step::after { transition: none !important; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
@@ -318,6 +392,125 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
                         (typically IPv6) appears twice. Keep the newest entry and delete the obsolete ones.
                     </p>
 
+
+                    <?php if ($_merged > 0): ?>
+                    <div class="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-center gap-3">
+                        <i data-feather="check-circle" class="w-5 h-5 flex-shrink-0 text-emerald-600"></i>
+                        <span>Merged #<?php echo $_mergedFrom; ?> into <a href="host.php?hostId=<?php echo $_merged; ?>" class="font-medium underline">#<?php echo $_merged; ?></a>:
+                            <?php echo $_movedReports; ?> report<?php echo ($_movedReports != 1 ? 's' : ''); ?> moved,
+                            <?php echo $_copiedUsers; ?> user assignment<?php echo ($_copiedUsers != 1 ? 's' : ''); ?> copied, #<?php echo $_mergedFrom; ?> removed.</span>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($_mergeError !== null): ?>
+                    <div class="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        <b>Merge failed, nothing was changed:</b> <?php echo htmlspecialchars($_mergeError); ?>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($mergePlan !== null): ?>
+                    <!-- Merge plan -->
+                    <div id="merge-plan" class="mb-6 bg-white shadow rounded-lg border-2 border-brand-600 overflow-hidden">
+                        <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
+                            <i data-feather="git-merge" class="w-5 h-5 text-brand-600"></i>
+                            <h3 class="text-base font-semibold text-slate-900">Merge plan</h3>
+                        </div>
+                        <?php if (!empty($mergePlan['errors'])): ?>
+                        <div class="px-4 py-4 text-sm text-red-800 bg-red-50">
+                            <?php foreach ($mergePlan['errors'] as $err): ?><p class="m-0"><?php echo htmlspecialchars($err); ?></p><?php endforeach; ?>
+                            <a href="hosts.php?duplicates=1" class="inline-block mt-2 underline">Back to duplicates</a>
+                        </div>
+                        <?php else: ?>
+                        <?php
+                        $mpFrom = $mergePlan['from'];
+                        $mpInto = $mergePlan['into'];
+                        $mpFromId = $mpFrom->getId();
+                        $mpIntoId = $mpInto->getId();
+                        $mpFr = $mergePlan['fromReports'];
+                        $mpIr = $mergePlan['intoReports'];
+                        ?>
+                        <div class="px-4 py-4 text-sm text-slate-700 space-y-4">
+                            <p class="m-0">
+                                Merge the old entry <a href="host.php?hostId=<?php echo $mpFromId; ?>" class="font-medium text-brand-600 underline">#<?php echo $mpFromId; ?></a>
+                                (last report <?php echo $mergePlan['fromLastReport'] ? $mergePlan['fromLastReport'] : "-"; ?>, reporter <code class="bg-slate-100 px-1 rounded"><?php echo htmlspecialchars($mpFrom->getReporterHostname()); ?></code>)
+                                into the newest entry <a href="host.php?hostId=<?php echo $mpIntoId; ?>" class="font-medium text-brand-600 underline">#<?php echo $mpIntoId; ?></a>
+                                (last report <?php echo $mergePlan['intoLastReport'] ? $mergePlan['intoLastReport'] : "-"; ?>, reporter <code class="bg-slate-100 px-1 rounded"><?php echo htmlspecialchars($mpInto->getReporterHostname()); ?></code>)
+                                of <b><?php echo htmlspecialchars($mpInto->getHostname()); ?></b>. New reports from this host are stored on #<?php echo $mpIntoId; ?>, so that entry is kept.
+                            </p>
+                            <ol id="merge-steps" class="merge-steps list-none m-0 p-0">
+                                <li class="merge-step" data-step="1">
+                                    <span class="merge-bubble" aria-hidden="true"><span class="merge-num">1</span></span>
+                                    <div class="merge-body">
+                                        <b>Move the report history.</b>
+                                        <?php if ($mpFr['count'] > 0): ?>
+                                            <?php echo $mpFr['count']; ?> report<?php echo ($mpFr['count'] != 1 ? 's' : ''); ?> of #<?php echo $mpFromId; ?>
+                                            (<?php echo $mpFr['first']; ?> – <?php echo $mpFr['last']; ?>) are moved to #<?php echo $mpIntoId; ?>,
+                                            which then has <?php echo $mpFr['count'] + $mpIr['count']; ?> reports.
+                                        <?php else: ?>
+                                            #<?php echo $mpFromId; ?> has no reports, nothing to move.
+                                        <?php endif; ?>
+                                        <p class="merge-result" aria-live="polite"></p>
+                                        <details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">SQL</summary>
+                                            <pre class="text-xs bg-slate-50 border border-slate-200 rounded p-2 mt-1 overflow-x-auto">UPDATE IGNORE ReportHost SET hostId = <?php echo $mpIntoId; ?> WHERE hostId = <?php echo $mpFromId; ?>;</pre></details>
+                                    </div>
+                                </li>
+                                <li class="merge-step" data-step="2">
+                                    <span class="merge-bubble" aria-hidden="true"><span class="merge-num">2</span></span>
+                                    <div class="merge-body">
+                                        <b>Keep direct user assignments.</b>
+                                        <?php if (!empty($mergePlan['usersToCopy'])): ?>
+                                            Copied to #<?php echo $mpIntoId; ?>: <?php echo htmlspecialchars(implode(", ", $mergePlan['usersToCopy'])); ?>.
+                                        <?php else: ?>
+                                            #<?php echo $mpFromId; ?> has no users assigned directly that #<?php echo $mpIntoId; ?> lacks, nothing to copy.
+                                        <?php endif; ?>
+                                        <p class="merge-result" aria-live="polite"></p>
+                                        <details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">SQL</summary>
+                                            <pre class="text-xs bg-slate-50 border border-slate-200 rounded p-2 mt-1 overflow-x-auto">INSERT IGNORE INTO UserHost (userId, hostId) SELECT userId, <?php echo $mpIntoId; ?> FROM UserHost WHERE hostId = <?php echo $mpFromId; ?>;</pre></details>
+                                    </div>
+                                </li>
+                                <li class="merge-step" data-step="3">
+                                    <span class="merge-bubble" aria-hidden="true"><span class="merge-num">3</span></span>
+                                    <div class="merge-body">
+                                        <b>Remove the old entry #<?php echo $mpFromId; ?>.</b>
+                                        Its <?php echo $mergePlan['fromPkgs']; ?> installed packages (the package list from its last report, now outdated)
+                                        and its host group membership<?php echo (count($mergePlan['fromGroups']) != 1 ? 's' : ''); ?>
+                                        (<?php echo empty($mergePlan['fromGroups']) ? "none" : htmlspecialchars(implode(", ", $mergePlan['fromGroups'])); ?>) are removed with it.
+                                        Old packages are <u>not</u> copied: #<?php echo $mpIntoId; ?> keeps the <?php echo $mergePlan['intoPkgs']; ?> packages from its latest report.
+                                        <p class="merge-result" aria-live="polite"></p>
+                                        <details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer">SQL</summary>
+                                            <pre class="text-xs bg-slate-50 border border-slate-200 rounded p-2 mt-1 overflow-x-auto">DELETE FROM Host WHERE id = <?php echo $mpFromId; ?>;  -- ON DELETE CASCADE: InstalledPkg, HostHostGroup, UserHost, ReportHost</pre></details>
+                                    </div>
+                                </li>
+                                <li class="merge-step" data-step="4">
+                                    <span class="merge-bubble" aria-hidden="true"><span class="merge-num">4</span></span>
+                                    <div class="merge-body">
+                                        <b>Verify.</b>
+                                        Check that #<?php echo $mpFromId; ?> is gone and no rows reference it anymore.
+                                        #<?php echo $mpIntoId; ?> itself is unchanged: its packages, host group<?php echo (count($mergePlan['intoGroups']) != 1 ? 's' : ''); ?>
+                                        (<?php echo empty($mergePlan['intoGroups']) ? "none" : htmlspecialchars(implode(", ", $mergePlan['intoGroups'])); ?>),
+                                        CVE counts and last report stay as they are.
+                                        <p class="merge-result" aria-live="polite"></p>
+                                    </div>
+                                </li>
+                            </ol>
+                            <p class="m-0 text-xs text-slate-500">Steps 1–3 run in one database transaction. If any of them fails, nothing is changed. The merge can't be undone.</p>
+                            <div id="merge-outcome" class="hidden rounded-md px-4 py-3 text-sm" role="status"></div>
+                            <div id="merge-actions" class="flex items-center gap-3">
+                                <form id="merge-form" action="hosts.php?duplicates=1" method="post" class="m-0" onsubmit="return runMerge(this);">
+                                    <input type="hidden" name="act" value="merge" />
+                                    <input type="hidden" name="mergeFrom" value="<?php echo $mpFromId; ?>" />
+                                    <input type="hidden" name="mergeInto" value="<?php echo $mpIntoId; ?>" />
+                                    <button id="merge-confirm" type="submit" class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i data-feather="git-merge" class="w-4 h-4"></i> Confirm merge
+                                    </button>
+                                </form>
+                                <a id="merge-cancel" href="hosts.php?duplicates=1" class="text-sm text-slate-600 hover:underline">Cancel</a>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+
                     <?php if ($duplicatesCount == 0 && $unresolvedCount == 0): ?>
                         <div class="bg-white shadow rounded-lg border border-slate-200 px-6 py-8 text-center text-sm text-slate-500 mb-4">No duplicated hosts found.</div>
                     <?php endif; ?>
@@ -343,7 +536,7 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-slate-200">
-                                    <?php $dupFirst = true; foreach ($dupList as $dupHost): ?>
+                                    <?php $dupFirst = true; $dupNewestId = $dupList[0]->getId(); foreach ($dupList as $dupHost): ?>
                                     <?php
                                     $dupReport = null;
                                     if ($dupHost->getLastReportId() != null && $dupHost->getLastReportId() != -1) {
@@ -370,6 +563,11 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
                                         </td>
                                         <td class="px-3 py-1 whitespace-nowrap"><?php echo $dupReport ? $dupReport->getReceivedOn() : "-"; ?></td>
                                         <td class="px-3 py-1 whitespace-nowrap text-right">
+                                            <?php if (!$dupFirst): ?>
+                                            <a href="hosts.php?duplicates=1&amp;mergeFrom=<?php echo $dupHost->getId(); ?>&amp;mergeInto=<?php echo $dupNewestId; ?>#merge-plan" class="inline-flex items-center gap-1 mr-3 rounded border border-brand-600 px-2 py-0.5 text-xs font-medium text-brand-700 hover:bg-brand-50" title="Show the steps to merge this entry into #<?php echo $dupNewestId; ?>">
+                                                <i data-feather="git-merge" class="w-3 h-3"></i> Merge into #<?php echo $dupNewestId; ?>
+                                            </a>
+                                            <?php endif; ?>
                                             <button type="button" class="text-red-600 hover:text-red-900" title="Delete this entry" aria-label="Delete entry <?php echo $dupHost->getId(); ?>" onclick="confirmDelete(<?php echo $dupHost->getId(); ?>, '<?php echo htmlspecialchars($dupHost->getHostname() . " (id " . $dupHost->getId() . ")"); ?>')">
                                                 <i data-feather="trash-2" class="w-4 h-4"></i>
                                             </button>
@@ -1073,6 +1271,85 @@ function buildSortUrl($sortBy, $sortByDirection, $appendSearch = null, $appendHo
             document.getElementById('sidebar').classList.toggle('sidebar-collapsed');
         }
         
+        // Merge: run on the server, then fill the step bubbles one by one with the real result of each step
+        function runMerge(form) {
+            if (!window.fetch || !window.FormData) {
+                return true; // old browser: plain POST, the page reloads with the result
+            }
+            var steps = Array.prototype.slice.call(document.querySelectorAll('#merge-steps .merge-step'));
+            var outcome = document.getElementById('merge-outcome');
+            var confirmBtn = document.getElementById('merge-confirm');
+            var cancel = document.getElementById('merge-cancel');
+            var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var pause = function (ms) { return new Promise(function (r) { setTimeout(r, reduced ? 0 : ms); }); };
+            var setResult = function (li, text) { li.querySelector('.merge-result').textContent = text; };
+            var showOutcome = function (cls, html) {
+                outcome.className = 'rounded-md px-4 py-3 text-sm ' + cls;
+                outcome.innerHTML = html;
+            };
+
+            confirmBtn.disabled = true;
+            cancel.classList.add('hidden');
+            steps.forEach(function (li) { li.classList.remove('is-running', 'is-done', 'is-failed', 'is-undone'); });
+            steps[0].classList.add('is-running');
+
+            var data = new FormData(form);
+            data.append('ajax', '1');
+            fetch(form.getAttribute('action'), { method: 'POST', body: data, credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('Server returned HTTP ' + r.status); }
+                    return r.json();
+                })
+                .catch(function (err) {
+                    return { ok: false, failedStep: 1, rolledBack: true, error: err.message + ' (the merge may not have run, reload the page to check)' };
+                })
+                .then(function (res) {
+                    var lastOk = res.ok ? steps.length : Math.max(0, (res.failedStep || 1) - 1);
+                    var chain = Promise.resolve();
+                    steps.forEach(function (li, i) {
+                        chain = chain.then(function () {
+                            if (i < lastOk) {
+                                li.classList.add('is-running');
+                                return pause(450).then(function () {
+                                    li.classList.remove('is-running');
+                                    li.classList.add('is-done');
+                                    setResult(li, '\u2713 ' + ((res.steps && res.steps[i + 1]) || 'Done'));
+                                    return pause(400);
+                                });
+                            }
+                            if (!res.ok && i === lastOk) {
+                                li.classList.remove('is-running');
+                                li.classList.add('is-failed');
+                                setResult(li, '\u2715 ' + res.error);
+                            }
+                        });
+                    });
+                    return chain.then(function () {
+                        if (res.ok) {
+                            showOutcome('bg-emerald-50 border border-emerald-300 text-emerald-800',
+                                '<b>Merge complete.</b> <a class="underline font-medium" href="' + res.next + '">Back to duplicates</a>');
+                            return;
+                        }
+                        if (res.rolledBack) {
+                            // steps before the failure were rolled back with the transaction
+                            steps.forEach(function (li, i) {
+                                if (i < lastOk) { li.classList.remove('is-done'); li.classList.add('is-undone'); }
+                            });
+                            showOutcome('bg-red-50 border border-red-300 text-red-800',
+                                (res.failedStep === 0
+                                    ? '<b>The merge is no longer allowed, nothing was changed.</b> '
+                                    : '<b>Merge failed in step ' + res.failedStep + ', the transaction was rolled back and nothing was changed.</b> ')
+                                + '<a class="underline" href="hosts.php?duplicates=1">Back to duplicates</a>');
+                        } else {
+                            showOutcome('bg-amber-50 border border-amber-300 text-amber-800',
+                                '<b>The merge was committed, but verification found leftovers.</b> Check the database. '
+                                + '<a class="underline" href="hosts.php?duplicates=1">Back to duplicates</a>');
+                        }
+                    });
+                });
+            return false;
+        }
+
         function confirmDelete(id, hostname) {
             if (confirm('Are you sure you want to delete host "' + hostname + '"?')) {
                 document.forms.form.act.value = "delete";
