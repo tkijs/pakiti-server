@@ -69,7 +69,7 @@ class HostGroupDao
         return ($id == null) ? -1 : $id;
     }
 
-    public function getHostGroupsIds($orderBy = null, $pageSize = -1, $pageNum = -1, $userId = -1)
+    public function getHostGroupsIds($orderBy = null, $pageSize = -1, $pageNum = -1, $userId = -1, $orderByDirection = null)
     {
         $select = "HostGroup.id";
         $from = "HostGroup";
@@ -79,8 +79,11 @@ class HostGroupDao
         $limit = null;
         $offset = null;
 
-        if ($orderBy != null) {
-            $order = "HostGroup.".$this->db->escape($orderBy)."";
+        # only known columns, the value comes from the URL
+        $columns = array("name", "url", "contact", "note");
+        if ($orderBy != null && in_array($orderBy, $columns, true)) {
+            $direction = strtolower((string) $orderByDirection) == "desc" ? "DESC" : "ASC";
+            $order = "HostGroup.`" . $orderBy . "` " . $direction;
         }
 
         if ($userId != -1) {

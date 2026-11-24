@@ -95,13 +95,13 @@ $reports = $pakiti->getManager("ReportsManager")->getHostReports($host->getId(),
                     <thead class="bg-slate-50">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                <a href="?sortBy=id<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "id" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">ID <?php if ($html->getSortBy() == "id") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                <a href="<?php echo $html->getQueryString(array("sortBy" => "id", "sortByDirection" => $html->getSortBy() == "id" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">ID <?php if ($html->getSortBy() == "id") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                <a href="?sortBy=receivedOn<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "receivedOn" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Received on <?php if ($html->getSortBy() == "receivedOn") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                <a href="<?php echo $html->getQueryString(array("sortBy" => "receivedOn", "sortByDirection" => $html->getSortBy() == "receivedOn" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Received on <?php if ($html->getSortBy() == "receivedOn") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                <a href="?sortBy=processedOn<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "processedOn" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Processed on <?php if ($html->getSortBy() == "processedOn") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                <a href="<?php echo $html->getQueryString(array("sortBy" => "processedOn", "sortByDirection" => $html->getSortBy() == "processedOn" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Processed on <?php if ($html->getSortBy() == "processedOn") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Through proxy</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Host Group</th>

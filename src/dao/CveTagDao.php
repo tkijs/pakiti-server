@@ -42,7 +42,7 @@ class CveTagDao
         $this->db->query($sql);
     }
 
-    public function getIds($orderBy = null, $pageSize = -1, $pageNum = -1)
+    public function getIds($orderBy = null, $pageSize = -1, $pageNum = -1, $orderByDirection = null)
     {
         $select = "CveTag.id";
         $from = "CveTag";
@@ -52,8 +52,11 @@ class CveTagDao
         $limit = null;
         $offset = null;
 
-        if ($orderBy != null) {
-            $order = "CveTag.".$this->db->escape($orderBy)."";
+        # only known columns, the value comes from the URL
+        $columns = array("cveName", "tagName", "reason", "infoUrl", "timestamp", "enabled", "modifier");
+        if ($orderBy != null && in_array($orderBy, $columns, true)) {
+            $direction = strtolower((string) $orderByDirection) == "desc" ? "DESC" : "ASC";
+            $order = "CveTag.`" . $orderBy . "` " . $direction . ", CveTag.cveName " . $direction;
         }
 
         if ($pageSize != -1 && $pageNum != -1) {

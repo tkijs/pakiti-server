@@ -102,11 +102,11 @@ $runningFlags = $pakiti->getManager("PkgsManager")->getRunningFlagsForHost($host
                     <thead class="bg-slate-50">
                         <tr>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                <a href="?sortBy=name<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "name" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Name <?php if ($html->getSortBy() == "name") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                <a href="<?php echo $html->getQueryString(array("sortBy" => "name", "sortByDirection" => $html->getSortBy() == "name" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Name <?php if ($html->getSortBy() == "name") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Installed version</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                <a href="?sortBy=arch<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "arch" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Architecture <?php if ($html->getSortBy() == "arch") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                <a href="<?php echo $html->getQueryString(array("sortBy" => "arch", "sortByDirection" => $html->getSortBy() == "arch" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Architecture <?php if ($html->getSortBy() == "arch") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                             </th>
                         </tr>
                     </thead>

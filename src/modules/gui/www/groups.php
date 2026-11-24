@@ -26,7 +26,7 @@ $html->setMenuActiveItem("groups.php");
 $html->setDefaultSorting("name");
 $html->setNumOfEntities($html->getPakiti()->getManager("HostGroupsManager")->getHostGroupsCount($html->getUserId()));
 
-$hostgroups = $html->getPakiti()->getManager("HostGroupsManager")->getHostGroups($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $html->getUserId());
+$hostgroups = $html->getPakiti()->getManager("HostGroupsManager")->getHostGroups($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $html->getUserId(), $html->getSortByDirection());
 
 // Edit data for modal
 $editGroupId = isset($_GET['edit']) ? (int)$_GET['edit'] : -1;
@@ -165,7 +165,7 @@ if ($editGroupId > 0) {
                                 <thead class="bg-slate-50">
                                     <tr>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=name<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "name" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Name <?php if ($html->getSortBy() == "name") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "name", "sortByDirection" => $html->getSortBy() == "name" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Name <?php if ($html->getSortBy() == "name") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">#Hosts</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">#Vulnerable</th>

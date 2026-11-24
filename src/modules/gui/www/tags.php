@@ -94,7 +94,7 @@ $html->setTitle("CVE Tags");
 $html->setMenuActiveItem("tags.php");
 $html->setNumOfEntities($html->getPakiti()->getManager("CveTagsManager")->getCveTagsCount());
 
-$cveTags = $html->getPakiti()->getManager("CveTagsManager")->getCveTags($html->getSortBy(), $html->getPageSize(), $html->getPageNum());
+$cveTags = $html->getPakiti()->getManager("CveTagsManager")->getCveTags($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $html->getSortByDirection());
 
 // Only load CVEs that already have tags (much faster than loading all 58k+ CVEs)
 $tagNames = Config::$TAGS;
@@ -258,21 +258,21 @@ function tagBadgeClasses($tagName) {
                                 <thead class="bg-slate-50">
                                     <tr>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=enabled<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "enabled" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Enabled <?php if ($html->getSortBy() == "enabled") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "enabled", "sortByDirection" => $html->getSortBy() == "enabled" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Enabled <?php if ($html->getSortBy() == "enabled") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=cveName<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "cveName" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">CVE <?php if ($html->getSortBy() == "cveName") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "cveName", "sortByDirection" => $html->getSortBy() == "cveName" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">CVE <?php if ($html->getSortBy() == "cveName") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=tagName<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "tagName" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Tag <?php if ($html->getSortBy() == "tagName") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "tagName", "sortByDirection" => $html->getSortBy() == "tagName" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Tag <?php if ($html->getSortBy() == "tagName") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Reason</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">InfoUrl</th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=modifier<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "modifier" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Modifier <?php if ($html->getSortBy() == "modifier") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "modifier", "sortByDirection" => $html->getSortBy() == "modifier" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Modifier <?php if ($html->getSortBy() == "modifier") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                                            <a href="?sortBy=timestamp<?php echo $html->getQueryString(array("sortByDirection" => $html->getSortBy() == "timestamp" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Timestamp <?php if ($html->getSortBy() == "timestamp") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
+                                            <a href="<?php echo $html->getQueryString(array("sortBy" => "timestamp", "sortByDirection" => $html->getSortBy() == "timestamp" ? ($html->getSortByDirection() == "asc" ? "desc" : "asc") : "asc")); ?>" class="hover:text-brand-600">Timestamp <?php if ($html->getSortBy() == "timestamp") echo ($html->getSortByDirection() == "asc" ? "▲" : "▼"); ?></a>
                                         </th>
                                         <th class="px-3 py-2 text-right text-xs font-medium text-slate-500 uppercase tracking-wider w-16">Actions</th>
                                     </tr>

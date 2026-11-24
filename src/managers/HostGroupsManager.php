@@ -57,11 +57,11 @@ class HostGroupsManager extends DefaultManager
         return $hostGroups;
     }
 
-    public function getHostGroups($orderBy = null, $pageNum = -1, $pageSize = -1, $userId = -1)
+    public function getHostGroups($orderBy = null, $pageNum = -1, $pageSize = -1, $userId = -1, $orderByDirection = null)
     {
         Utils::log(LOG_DEBUG, "Getting all host groups", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("HostGroup");
-        $ids = $dao->getHostGroupsIds($orderBy, $pageNum, $pageSize, $userId);
+        $ids = $dao->getHostGroupsIds($orderBy, $pageNum, $pageSize, $userId, $orderByDirection);
 
         $hostGroups = array();
         foreach ($ids as $id) {
