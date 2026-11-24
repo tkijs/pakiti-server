@@ -92,9 +92,10 @@ switch ($html->getHttpPostVar("act")) {
 
 $html->setTitle("CVE Tags");
 $html->setMenuActiveItem("tags.php");
-$html->setNumOfEntities($html->getPakiti()->getManager("CveTagsManager")->getCveTagsCount());
+$_search = $html->getHttpGetVar("search", null);
+$html->setNumOfEntities($html->getPakiti()->getManager("CveTagsManager")->getCveTagsCount($_search));
 
-$cveTags = $html->getPakiti()->getManager("CveTagsManager")->getCveTags($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $html->getSortByDirection());
+$cveTags = $html->getPakiti()->getManager("CveTagsManager")->getCveTags($html->getSortBy(), $html->getPageSize(), $html->getPageNum(), $html->getSortByDirection(), $_search);
 
 // Only load CVEs that already have tags (much faster than loading all 58k+ CVEs)
 $tagNames = Config::$TAGS;
@@ -248,6 +249,28 @@ function tagBadgeClasses($tagName) {
                             <i data-feather="plus" class="w-4 h-4 mr-2"></i> Add CVE tag
                         </button>
                     </div>
+
+                    <!-- Search by CVE -->
+                    <form method="get" class="bg-white shadow rounded-lg mb-6 overflow-hidden">
+                        <div class="p-4 flex flex-col sm:flex-row gap-3 items-center">
+                            <div class="relative flex-1 w-full">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="search" class="h-4 w-4 text-slate-400"></i>
+                                </div>
+                                <input type="text" name="search" class="block w-full pl-10 sm:text-sm border-slate-300 rounded-md py-2.5 px-3 border shadow-sm focus:ring-brand-500 focus:border-brand-500 focus:outline-none" placeholder="Search CVE, e.g. CVE-2026-42257 or 2026-42" value="<?php if ($_search != null) echo $_search; ?>">
+                            </div>
+                            <?php if ($html->getSortBy() != null) { ?>
+                                <input type="hidden" name="sortBy" value="<?php echo $html->getSortBy(); ?>">
+                            <?php } ?>
+                            <?php if ($html->getSortByDirection() != null) { ?>
+                                <input type="hidden" name="sortByDirection" value="<?php echo $html->getSortByDirection(); ?>">
+                            <?php } ?>
+                            <button type="submit" class="inline-flex items-center px-4 py-2.5 bg-brand-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500">Search</button>
+                            <?php if ($_search != null) { ?>
+                                <a href="tags.php" class="text-sm text-slate-500 hover:text-slate-700">Clear</a>
+                            <?php } ?>
+                        </div>
+                    </form>
 
                     <?php include(realpath(dirname(__FILE__)) . "/../common/pagination.php"); ?>
 

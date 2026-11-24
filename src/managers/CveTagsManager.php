@@ -30,11 +30,11 @@ class CveTagsManager extends DefaultManager
         return $new;
     }
 
-    public function getCveTags($orderBy = null, $pageSize = -1, $pageNum = -1, $orderByDirection = null)
+    public function getCveTags($orderBy = null, $pageSize = -1, $pageNum = -1, $orderByDirection = null, $search = null)
     {
         Utils::log(LOG_DEBUG, "Getting cveTags", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("CveTag");
-        $ids = $dao->getIds($orderBy, $pageSize, $pageNum, $orderByDirection);
+        $ids = $dao->getIds($orderBy, $pageSize, $pageNum, $orderByDirection, $search);
 
         $cveTags = array();
         foreach ($ids as $id) {
@@ -43,11 +43,11 @@ class CveTagsManager extends DefaultManager
         return $cveTags;
     }
 
-    public function getCveTagsCount()
+    public function getCveTagsCount($search = null)
     {
         Utils::log(LOG_DEBUG, "Getting cveTags count", __FILE__, __LINE__);
         $dao = $this->getPakiti()->getDao("CveTag");
-        return sizeof($dao->getIds());
+        return sizeof($dao->getIds(null, -1, -1, null, $search));
     }
 
     public function getCveTagIdByCveNameTagName($cveName, $tagName)
