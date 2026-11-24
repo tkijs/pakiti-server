@@ -11,6 +11,9 @@ class Debian extends SubSource implements ISubSource
     protected static $NAME = "Debian Advisories";
     protected static $TYPE = "Debian";
     protected static $DEBIAN_COMPONENTS = [ "non-free", "contrib", "main" ];
+    /* components that exist only in some releases (non-free-firmware since bookworm),
+       skipped where the release doesn't have them */
+    protected static $DEBIAN_OPTIONAL_COMPONENTS = [ "non-free-firmware" ];
 
     /* lists of binary packages produced from individual source package */
     private $binary_packages = array();
@@ -110,12 +113,17 @@ class Debian extends SubSource implements ISubSource
     private function update_package_mapping($deb_release)
     {
         $mappings = array();
-        foreach (self::$DEBIAN_COMPONENTS as $component) {
+        foreach (array_merge(self::$DEBIAN_COMPONENTS, self::$DEBIAN_OPTIONAL_COMPONENTS) as $component) {
+            $optional = in_array($component, self::$DEBIAN_OPTIONAL_COMPONENTS);
             try {
                 $data = Utils::downloadContents(sprintf("%s/dists/%s/%s/source/Sources.gz",
                         Config::$DEBIAN_REPOSITORY, $deb_release, $component));
                 $this->update_packages($data, $mappings);
             } catch (Exception $e) {
+                if ($optional && strpos($e->getMessage(), "404") !== false) {
+                    Utils::log(LOG_DEBUG, sprintf("Debian %s has no %s component, skipping", $deb_release, $component), __FILE__, __LINE__);
+                    continue;
+                }
                 throw new Exception(sprintf("Error reading Debian Source indices: %s", $e->getMessage()));
             }
         }

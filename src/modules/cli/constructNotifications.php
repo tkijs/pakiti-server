@@ -20,14 +20,13 @@ $usersManager = $pakiti->getManager("UsersManager");
  * Ensure the host is relevant e.g. contains numOfCvesWithTag.
  */
 $hosts = $hostsManager->getHosts(
-    null, 
-    -1, 
-    -1, 
-    null, 
-    null, 
-    true, 
-    -1, 
-    null
+    null,   # orderBy
+    null,   # orderByDirection
+    -1,     # pageSize
+    -1,     # pageNum
+    null,   # search
+    null,   # cveName
+    true    # tag: hosts with any enabled CveTag
 );
 
 $notifications = array();
