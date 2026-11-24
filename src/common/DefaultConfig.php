@@ -111,6 +111,18 @@ class DefaultConfig
         "High",
     );
 
+    # Auto-tagging CVEs by their NVD CVSS score (src/modules/cli/tagCvesFromNvd.php).
+    # One gzipped JSON 2.0 feed per year, %s is replaced by the year.
+    public static $NVD_FEED_URL = "https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-%s.json.gz";
+    # First yearly feed read by every run (feeds are split by the year in the CVE ID)
+    public static $NVD_FIRST_YEAR = 2002;
+    # CVEs with a CVSS base score >= this value get the tag below (9.0 = CVSS "Critical")
+    public static $NVD_MIN_SCORE = 9.0;
+    public static $NVD_TAG_NAME = "Critical";
+    # Scores from these sources are ignored (source identifiers as in the feed). By default
+    # CISA-ADP, which adds worst-case scores to CVEs whose vendor (CNA) gave none.
+    public static $NVD_IGNORED_SOURCES = array("134c704f-9b21-4f2e-91b3-4a467353bcc0");
+
     # Favorite shortcuts to be made available in the GUI
     public static $GUI_HOSTS_FAVORITE_FILTERS = array(
         "With tagged CVEs in the last 24 hours" => "tag=true&listTaggedCves=true&activity=24h",

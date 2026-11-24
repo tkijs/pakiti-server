@@ -97,6 +97,15 @@ Run it once a week, e.g. with a systemd timer or a cron entry such as:
 
 Use `--dry-run` to print the emails instead of sending them and `--no-unresolved` to report only actual duplicates.
 
+### Auto-tagging CVEs by their NVD score (optional)
+Some vulnerability sources, e.g. the Debian DSA/DLA lists, publish no severity, so their CVEs are never auto-tagged from OVAL. `tagCvesFromNvd.php` reads the [NVD JSON feeds](https://nvd.nist.gov/vuln/data-feeds) and tags every CVE known to Pakiti with a CVSS base score of at least `$NVD_MIN_SCORE` (default 9.0) as `$NVD_TAG_NAME` (default `Critical`, modifier `auto-nvd`). CVEs that already have a tag are left alone and tags are never removed. The vendor's score (the CNA that published the CVE) is preferred, NVD's own score is used when the vendor gave none, as NVD tends to assume the worst case for libraries. Scores from `$NVD_IGNORED_SOURCES` are ignored; by default that is CISA-ADP, whose worst-case scores would otherwise tag many CVEs the vendor rated lower or not at all. Run it daily between the VDS synchronization (which provides the CVE list) and `calculateVulnerabilities.php` (which recalculates the per-host tagged CVE counts shown in the GUI and used by notifications), e.g. by extending the cron job above:
+
+    30 4 * * * root php /var/www/pakiti-server/src/modules/cli/vds.php -c synchronize && php /var/www/pakiti-server/src/modules/cli/tagCvesFromNvd.php; php /var/www/pakiti-server/src/modules/cli/calculateVulnerabilities.php
+
+Every run downloads all yearly feeds since `$NVD_FIRST_YEAR` (default 2002; about 25 files, 237 MB compressed in total) one at a time to the temporary directory, processes each and deletes it right after. A run takes a few minutes and needs little memory, as the feeds are streamed.
+
+Use `--dry-run -v` to see what would be tagged, `--from-year=<year>` to read only recent feeds (e.g. for a quick test) and `--feed=<url or file>` to read a specific (e.g. pre-downloaded) feed.
+
 ## Getting started with Pakiti
 
 In order to ease initial configuration of the Pakiti server, you can use the provided script:
